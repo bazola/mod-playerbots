@@ -12,6 +12,7 @@
 #include "Cell.h"
 #include "CellImpl.h"
 #include "ChannelMgr.h"
+#include "CompanyStanding.h"
 #include "DBCStores.h"
 #include "DBCStructure.h"
 #include "DatabaseEnv.h"
@@ -288,6 +289,8 @@ void RandomPlayerbotMgr::UpdateAIInternal(uint32 /*elapsed*/, bool /*minimal*/)
 
     if (!sPlayerbotAIConfig.randomBotAutologin || !sPlayerbotAIConfig.enabled)
         return;
+
+    CompanyStanding::instance().Update();  // local: company standing (custom wow plans/14, step C)
 
     /*if (sPlayerbotAIConfig.enablePrototypePerformanceDiff)
     {
@@ -1820,6 +1823,33 @@ void RandomPlayerbotMgr::RandomTeleportForLevel(Player* bot)
         std::vector<WorldLocation> playerZoneLocs = GetPlayerZoneTeleportLocations(locs, bot);
         if (!playerZoneLocs.empty())
             locs = std::move(playerZoneLocs);
+    }
+
+    // local: company seats (custom wow plans/14, step C). A guild bot sometimes goes where its company keeps
+    // a seat or fights for ground. The locations already fit its level; with none left, it travels as usual.
+    if (sPlayerbotAIConfig.companySeatTeleportChance && bot->GetGuildId() && !locs.empty() &&
+        urand(0, 99) < sPlayerbotAIConfig.companySeatTeleportChance)
+    {
+        std::vector<WorldLocation> companyLocs;
+        for (WorldLocation const& loc : locs)
+        {
+            uint32 zoneId = sMapMgr->GetZoneId(PHASEMASK_NORMAL, loc);
+            if (!CompanyStanding::instance().PullsToward(bot->GetGuildId(), zoneId))
+                continue;
+
+            // Same enemy-zone rule as RandomTeleport, so the set can't drain downstream.
+            if (AreaTableEntry const* zone = sAreaTableStore.LookupEntry(zoneId))
+            {
+                if ((zone->team == 4 && bot->GetTeamId() == TEAM_ALLIANCE) ||
+                    (zone->team == 2 && bot->GetTeamId() == TEAM_HORDE))
+                    continue;
+            }
+
+            companyLocs.push_back(loc);
+        }
+
+        if (!companyLocs.empty())
+            locs = std::move(companyLocs);
     }
 
     if (!locs.empty())

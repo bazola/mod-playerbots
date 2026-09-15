@@ -8,6 +8,7 @@
 #include "AreaDefines.h"
 #include "BroadcastHelper.h"
 #include "ChatHelper.h"
+#include "CompanyStanding.h"
 #include "DBCStores.h"
 #include "GossipDef.h"
 #include "IVMapMgr.h"
@@ -366,6 +367,10 @@ bool NewRpgGoCampAction::Execute(Event /*event*/)
 
 bool NewRpgWanderRandomAction::Execute(Event /*event*/)
 {
+    // local: company rivals (custom wow plans/14, step C): an idle bot may call out a rival company's member.
+    if (CompanyStanding::instance().TryChallengeRival(botAI, bot))
+        return true;
+
     if (SearchQuestGiverAndAcceptOrReward())
         return true;
 
@@ -374,6 +379,10 @@ bool NewRpgWanderRandomAction::Execute(Event /*event*/)
 
 bool NewRpgWanderNpcAction::Execute(Event /*event*/)
 {
+    // local: company rivals (custom wow plans/14, step C)
+    if (CompanyStanding::instance().TryChallengeRival(botAI, bot))
+        return true;
+
     if (SearchQuestGiverAndAcceptOrReward())
         return true;
 

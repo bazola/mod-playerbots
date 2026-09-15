@@ -776,6 +776,19 @@ AiPlayerbot.DisableDeathKnightLogin = 0
 # Default: 2
 AiPlayerbot.EraExpansion = 2
 
+# Local patch: company standing (guilds as fiefdoms). Reads guild_seat, guild_holding and guild_relation,
+# kept by an outside service; with the tables absent nothing happens. Chances are percent; 0 = stock behaviour.
+# CompanySeatTeleportChance: a guild bot's random teleport keeps to its company's seats and contested lands
+# CompanyRivalStance: stance (-100 .. 100) at or below which two companies count as rivals
+# CompanyRivalDeclineChance: a bot declines a group invite from a bot of a rival company (never a real player)
+# CompanyRivalDuelChance: every 30 s, an idle bot calls out a nearby bot of a rival company to a duel
+# Default: 300, 0, -30, 0, 0
+AiPlayerbot.CompanyRefreshSeconds = 300
+AiPlayerbot.CompanySeatTeleportChance = 0
+AiPlayerbot.CompanyRivalStance = -30
+AiPlayerbot.CompanyRivalDeclineChance = 0
+AiPlayerbot.CompanyRivalDuelChance = 0
+
 # Enable simulated expansion limitation for talents and glyphs
 # If enabled, limits talent trees to 6 rows plus the middle talent of the 7th row for bots until level 61
 # and 8 rows plus the middle talent of the 9th row for bots from level 61 until level 71

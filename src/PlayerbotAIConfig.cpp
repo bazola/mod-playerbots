@@ -677,6 +677,12 @@ bool PlayerbotAIConfig::Initialize()
     randomBotHordeRatio = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomBotHordeRatio", 50);
     disableDeathKnightLogin = sConfigMgr->GetOption<bool>("AiPlayerbot.DisableDeathKnightLogin", 0);
     eraExpansion = std::min<uint32>(sConfigMgr->GetOption<uint32>("AiPlayerbot.EraExpansion", 2), 2);
+    // local: company standing (custom wow plans/14, step C)
+    companyRefreshSeconds = sConfigMgr->GetOption<uint32>("AiPlayerbot.CompanyRefreshSeconds", 300);
+    companySeatTeleportChance = std::min<uint32>(sConfigMgr->GetOption<uint32>("AiPlayerbot.CompanySeatTeleportChance", 0), 100);
+    companyRivalStance = sConfigMgr->GetOption<int32>("AiPlayerbot.CompanyRivalStance", -30);
+    companyRivalDeclineChance = std::min<uint32>(sConfigMgr->GetOption<uint32>("AiPlayerbot.CompanyRivalDeclineChance", 0), 100);
+    companyRivalDuelChance = std::min<uint32>(sConfigMgr->GetOption<uint32>("AiPlayerbot.CompanyRivalDuelChance", 0), 100);
     limitTalentsExpansion = sConfigMgr->GetOption<bool>("AiPlayerbot.LimitTalentsExpansion", 0);
     botActiveAlone = sConfigMgr->GetOption<int32>("AiPlayerbot.BotActiveAlone", 10);
     BotActiveAloneDurationSeconds = sConfigMgr->GetOption<int32>("AiPlayerbot.BotActiveAloneDurationSeconds", 30);

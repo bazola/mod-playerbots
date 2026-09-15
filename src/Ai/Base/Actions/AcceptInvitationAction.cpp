@@ -5,6 +5,7 @@
  */
 
 #include "AcceptInvitationAction.h"
+#include "CompanyStanding.h"
 #include "Event.h"
 #include "ObjectAccessor.h"
 #include "PlayerbotAIConfig.h"
@@ -28,6 +29,19 @@ bool AcceptInvitationAction::Execute(Event event)
         return false;
 
     if (!botAI->GetSecurity()->CheckLevelFor(PLAYERBOT_SECURITY_INVITE, false, inviter))
+    {
+        WorldPacket data(SMSG_GROUP_DECLINE, 10);
+        data << bot->GetName();
+        inviter->SendDirectMessage(&data);
+        bot->UninviteFromGroup();
+        return false;
+    }
+
+    // local: company rivals (custom wow plans/14, step C). A bot will not follow a bot of a rival company.
+    // Real players are never refused.
+    if (sPlayerbotAIConfig.companyRivalDeclineChance && GET_PLAYERBOT_AI(inviter) &&
+        CompanyStanding::instance().AreRivals(bot->GetGuildId(), inviter->GetGuildId()) &&
+        urand(0, 99) < sPlayerbotAIConfig.companyRivalDeclineChance)
     {
         WorldPacket data(SMSG_GROUP_DECLINE, 10);
         data << bot->GetName();

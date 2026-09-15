@@ -357,6 +357,12 @@ public:
     uint32 randomBotHordeRatio;
     bool disableDeathKnightLogin;
     uint8 eraExpansion;  // local: release-schedule era gate (0 classic, 1 tbc, 2 wotlk)
+    // local: company standing (custom wow plans/14, step C); chances in percent, 0 = off
+    uint32 companyRefreshSeconds;
+    uint32 companySeatTeleportChance;
+    int32 companyRivalStance;
+    uint32 companyRivalDeclineChance;
+    uint32 companyRivalDuelChance;
     bool limitTalentsExpansion;
     uint32 botActiveAlone;
     uint32 BotActiveAloneDurationSeconds;
