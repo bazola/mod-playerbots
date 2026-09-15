@@ -6,6 +6,7 @@
 
 #include "NewRpgAction.h"
 #include "AreaDefines.h"
+#include "AuctionPosting.h"
 #include "BroadcastHelper.h"
 #include "ChatHelper.h"
 #include "CompanyStanding.h"
@@ -413,6 +414,9 @@ bool NewRpgWanderNpcAction::Execute(Event /*event*/)
             data.lastReach = getMSTime();
             if (bot->CanInteractWithQuestGiver(object))
                 InteractWithNpcOrGameObjectForQuest(data.npcOrGo);
+            // local: auctions (custom wow plans/17, §3.E.5)
+            if (Creature* creature = object->ToCreature())
+                AuctionPosting::instance().TryPost(botAI, bot, creature);
             return true;
         }
 

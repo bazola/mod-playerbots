@@ -828,6 +828,19 @@ AiPlayerbot.CompanyDefectRegard = 50
 AiPlayerbot.CompanyDefectAttachment = 0
 AiPlayerbot.CompanyFloor = 8
 
+# Local patch: auctions. A random bot that reaches an auctioneer on its wanderings puts up surplus loot from its bags
+# (AuctionPostChance percent, rolled at most once per AuctionPostCooldown seconds per bot): up to AuctionPostMaxItems
+# whole stacks of at least AuctionPostMinQuality that it would sell anyway, never gear it would wear or anything bound.
+# The price per unit is market_price (acore_characters, reloaded every AuctionMarketRefreshSeconds) or the vendor
+# price by quality, varied by 15%, and never below what the bot would get from a vendor after deposit and cut. The
+# listing goes through the core's own auction handler. 0 chance = stock (bots never list anything).
+# Default: 0, 3, 2, 1800, 600
+AiPlayerbot.AuctionPostChance = 0
+AiPlayerbot.AuctionPostMaxItems = 3
+AiPlayerbot.AuctionPostMinQuality = 2
+AiPlayerbot.AuctionPostCooldown = 1800
+AiPlayerbot.AuctionMarketRefreshSeconds = 600
+
 # Enable simulated expansion limitation for talents and glyphs
 # If enabled, limits talent trees to 6 rows plus the middle talent of the 7th row for bots until level 61
 # and 8 rows plus the middle talent of the 9th row for bots from level 61 until level 71

@@ -379,6 +379,12 @@ public:
     int32 companyDefectRegard;
     int32 companyDefectAttachment;
     uint32 companyFloor;
+    // local: auctions (custom wow plans/17, §3.E.5); chance in percent, 0 = off
+    uint32 auctionPostChance;
+    uint32 auctionPostMaxItems;
+    uint32 auctionPostMinQuality;
+    uint32 auctionPostCooldown;
+    uint32 auctionMarketRefreshSeconds;
     bool limitTalentsExpansion;
     uint32 botActiveAlone;
     uint32 BotActiveAloneDurationSeconds;

@@ -699,6 +699,12 @@ bool PlayerbotAIConfig::Initialize()
     companyDefectRegard = sConfigMgr->GetOption<int32>("AiPlayerbot.CompanyDefectRegard", 50);
     companyDefectAttachment = sConfigMgr->GetOption<int32>("AiPlayerbot.CompanyDefectAttachment", 0);
     companyFloor = sConfigMgr->GetOption<uint32>("AiPlayerbot.CompanyFloor", 8);
+    // local: auctions (custom wow plans/17, §3.E.5)
+    auctionPostChance = std::min<uint32>(sConfigMgr->GetOption<uint32>("AiPlayerbot.AuctionPostChance", 0), 100);
+    auctionPostMaxItems = sConfigMgr->GetOption<uint32>("AiPlayerbot.AuctionPostMaxItems", 3);
+    auctionPostMinQuality = sConfigMgr->GetOption<uint32>("AiPlayerbot.AuctionPostMinQuality", 2);
+    auctionPostCooldown = sConfigMgr->GetOption<uint32>("AiPlayerbot.AuctionPostCooldown", 1800);
+    auctionMarketRefreshSeconds = sConfigMgr->GetOption<uint32>("AiPlayerbot.AuctionMarketRefreshSeconds", 600);
     limitTalentsExpansion = sConfigMgr->GetOption<bool>("AiPlayerbot.LimitTalentsExpansion", 0);
     botActiveAlone = sConfigMgr->GetOption<int32>("AiPlayerbot.BotActiveAlone", 10);
     BotActiveAloneDurationSeconds = sConfigMgr->GetOption<int32>("AiPlayerbot.BotActiveAloneDurationSeconds", 30);
