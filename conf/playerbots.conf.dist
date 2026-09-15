@@ -769,6 +769,13 @@ AiPlayerbot.RandomBotHordeRatio = 50
 # Disable logging in of death knight bots
 AiPlayerbot.DisableDeathKnightLogin = 0
 
+# Local patch: release-schedule era for random bots
+# 0 = Classic (blood elf, draenei and death knight bots stay offline; bot sessions can't enter Outland/Northrend)
+# 1 = TBC (death knight bots stay offline; Northrend blocked)
+# 2 = WotLK (stock behaviour)
+# Default: 2
+AiPlayerbot.EraExpansion = 2
+
 # Enable simulated expansion limitation for talents and glyphs
 # If enabled, limits talent trees to 6 rows plus the middle talent of the 7th row for bots until level 61
 # and 8 rows plus the middle talent of the 9th row for bots from level 61 until level 71

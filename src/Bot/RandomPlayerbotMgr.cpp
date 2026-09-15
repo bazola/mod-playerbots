@@ -754,7 +754,11 @@ uint32 RandomPlayerbotMgr::AddRandomBots()
                 GetEventValue(charInfo.guid, "logout") ||
                 GetPlayerBot(charInfo.guid) ||
                 currentBots.contains(charInfo.guid) ||
-                (sPlayerbotAIConfig.disableDeathKnightLogin && charInfo.rClass == CLASS_DEATH_KNIGHT))
+                (sPlayerbotAIConfig.disableDeathKnightLogin && charInfo.rClass == CLASS_DEATH_KNIGHT) ||
+                // local: release-schedule era gate
+                (sPlayerbotAIConfig.eraExpansion < 2 && charInfo.rClass == CLASS_DEATH_KNIGHT) ||
+                (sPlayerbotAIConfig.eraExpansion < 1 &&
+                 (charInfo.rRace == RACE_BLOODELF || charInfo.rRace == RACE_DRAENEI)))
             {
                 return false;
             }

@@ -356,6 +356,7 @@ public:
     uint32 randomBotAllianceRatio;
     uint32 randomBotHordeRatio;
     bool disableDeathKnightLogin;
+    uint8 eraExpansion;  // local: release-schedule era gate (0 classic, 1 tbc, 2 wotlk)
     bool limitTalentsExpansion;
     uint32 botActiveAlone;
     uint32 BotActiveAloneDurationSeconds;

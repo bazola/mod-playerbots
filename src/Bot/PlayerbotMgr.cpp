@@ -202,8 +202,9 @@ void PlayerbotHolder::HandlePlayerBotLoginCallback(PlayerbotLoginQueryHolder con
     uint32 botAccountId = holder.GetAccountId();
     // At login DBC locale should be what the server is set to use by default (as spells etc are hardcoded to ENUS this
     // allows channels to work as intended)
+    // local: release-schedule era gate; the session expansion is what blocks map entry (Player::TeleportTo)
     WorldSession* botSession =
-        new WorldSession(botAccountId, "", 0x0, nullptr, SEC_PLAYER, EXPANSION_WRATH_OF_THE_LICH_KING, time_t(0),
+        new WorldSession(botAccountId, "", 0x0, nullptr, SEC_PLAYER, sPlayerbotAIConfig.eraExpansion, time_t(0),
                          sWorld->GetDefaultDbcLocale(), 0, false, false, 0, true);
 
     botSession->HandlePlayerLoginFromDB(holder);  // will delete lqh
