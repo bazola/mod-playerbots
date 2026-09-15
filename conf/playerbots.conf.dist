@@ -789,6 +789,23 @@ AiPlayerbot.CompanyRivalStance = -30
 AiPlayerbot.CompanyRivalDeclineChance = 0
 AiPlayerbot.CompanyRivalDuelChance = 0
 
+# Local patch: company regard gate. An unguilded bot answers a real player's guild charter or guild invite from
+# its regard for them (the regard table, kept by an outside service), says none of the stock replies, and writes
+# its answer to company_answer when that table exists. Bots' charters and invites keep the stock answer.
+# 0 = stock behaviour. Regard runs -100 .. 100; familiarity counts the moments between them.
+# CompanySignRegard / CompanySignFamiliarity: least regard and familiarity to sign a charter
+# CompanyJoinRegard: least regard to accept an invite
+# CompanyJoinFriendRegard: ... when a friend (CompanyFriendRegard or more) is already a member
+# CompanyEnemyRegard: at or below this the bot will not join them, nor a guild with such a person in it
+# Default: 0, 35, 3, 30, 15, 40, -40
+AiPlayerbot.CompanyRegardGate = 0
+AiPlayerbot.CompanySignRegard = 35
+AiPlayerbot.CompanySignFamiliarity = 3
+AiPlayerbot.CompanyJoinRegard = 30
+AiPlayerbot.CompanyJoinFriendRegard = 15
+AiPlayerbot.CompanyFriendRegard = 40
+AiPlayerbot.CompanyEnemyRegard = -40
+
 # Enable simulated expansion limitation for talents and glyphs
 # If enabled, limits talent trees to 6 rows plus the middle talent of the 7th row for bots until level 61
 # and 8 rows plus the middle talent of the 9th row for bots from level 61 until level 71

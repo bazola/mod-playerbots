@@ -6,7 +6,9 @@
 
 #include "PetitionSignAction.h"
 #include "ArenaTeam.h"
+#include "CompanyStanding.h"
 #include "Event.h"
+#include "PlayerbotAIConfig.h"
 #include "Playerbots.h"
 
 bool PetitionSignAction::Execute(Event event)
@@ -29,6 +31,19 @@ bool PetitionSignAction::Execute(Event event)
     Field* fields = result->Fetch();
     uint32 type = fields[0].Get<uint32>();
 
+    Player* _inviter = ObjectAccessor::FindPlayer(inviter);
+    if (!_inviter)
+        return false;
+
+    if (_inviter == bot)
+        return false;
+
+    // local: company regard gate (custom wow plans/18, step P2). Signing a real player's guild charter means
+    // leaving with them: the bot weighs its regard for them, says none of the stock lines, and its answer is
+    // written to company_answer. Arena charters and bots' charters keep the stock answer.
+    bool const weigh = type == 9 && sPlayerbotAIConfig.companyRegardGate && !GET_PLAYERBOT_AI(_inviter);
+    char const* reason = nullptr;
+
     bool accept = true;
 
     if (type != 9)
@@ -46,13 +61,18 @@ bool PetitionSignAction::Execute(Event event)
     {
         if (bot->GetGuildId())
         {
-            botAI->TellError("Sorry, I am in a guild already");
+            if (!weigh)
+                botAI->TellError("Sorry, I am in a guild already");
+            reason = "in_company";
             accept = false;
         }
 
         if (bot->GetGuildIdInvited())
         {
-            botAI->TellError("Sorry, I am invited to a guild already");
+            if (!weigh)
+                botAI->TellError("Sorry, I am invited to a guild already");
+            if (!reason)
+                reason = "invited";
             accept = false;
         }
 
@@ -66,14 +86,23 @@ bool PetitionSignAction::Execute(Event event)
         */
     }
 
-    Player* _inviter = ObjectAccessor::FindPlayer(inviter);
-    if (!_inviter)
-        return false;
+    if (accept && !botAI->GetSecurity()->CheckLevelFor(PLAYERBOT_SECURITY_INVITE, weigh, _inviter, true))
+    {
+        reason = "unwilling";
+        accept = false;
+    }
 
-    if (_inviter == bot)
-        return false;
+    if (accept && weigh)
+    {
+        CompanyStanding::Verdict const verdict = CompanyStanding::instance().JudgeCharter(bot, _inviter);
+        accept = verdict.accept;
+        reason = verdict.reason;
+    }
 
-    if (!accept || !botAI->GetSecurity()->CheckLevelFor(PLAYERBOT_SECURITY_INVITE, false, _inviter, true))
+    if (weigh)
+        CompanyStanding::instance().RecordAnswer(bot, _inviter, "sign", 0, accept, reason);
+
+    if (!accept)
     {
         WorldPacket data(MSG_PETITION_DECLINE);
         data << petitionGuid;
@@ -83,16 +112,12 @@ bool PetitionSignAction::Execute(Event event)
         return false;
     }
 
-    if (accept)
-    {
-        WorldPacket data(CMSG_PETITION_SIGN, 20);
-        data << petitionGuid << unk;
-        bot->GetSession()->HandlePetitionSignOpcode(data);
+    WorldPacket data(CMSG_PETITION_SIGN, 20);
+    data << petitionGuid << unk;
+    bot->GetSession()->HandlePetitionSignOpcode(data);
+    if (!weigh)
         bot->Say("Thanks for the invite!", LANG_UNIVERSAL);
-        LOG_INFO("playerbots", "Bot {} <{}> accepts {} invite", bot->GetGUID().ToString().c_str(),
-                 bot->GetName().c_str(), isArena ? "Arena" : "Guild");
-        return true;
-    }
-
-    return false;
+    LOG_INFO("playerbots", "Bot {} <{}> accepts {} invite", bot->GetGUID().ToString().c_str(),
+             bot->GetName().c_str(), isArena ? "Arena" : "Guild");
+    return true;
 }

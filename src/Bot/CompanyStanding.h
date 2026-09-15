@@ -41,11 +41,42 @@ public:
     // rolled at most every 30 s per bot). Never a real player. True when the challenge was made.
     bool TryChallengeRival(PlayerbotAI* botAI, Player* bot);
 
+    // local: company regard gate (custom wow plans/18, step P2). With AiPlayerbot.CompanyRegardGate = 1 an
+    // unguilded bot answers a real player's charter or company invite from its regard for them, kept in the
+    // same snapshot. The reason is a short code for company_answer.
+    struct Verdict
+    {
+        bool accept;
+        char const* reason;
+    };
+
+    // Put its name to the player's guild charter: regard at least CompanySignRegard, known at least
+    // CompanySignFamiliarity moments.
+    Verdict JudgeCharter(Player* bot, Player* from) const;
+
+    // Join the player's company: regard at least CompanyJoinRegard, or CompanyJoinFriendRegard with a friend
+    // (CompanyFriendRegard) inside; never with someone it hates (CompanyEnemyRegard) inside.
+    Verdict JudgeInvite(Player* bot, Player* from, uint32 guildId) const;
+
+    // Async insert into company_answer when the table exists. kind is "sign" or "join"; guildId 0 for a charter.
+    void RecordAnswer(Player* bot, Player* from, char const* kind, uint32 guildId, bool accepted, char const* reason) const;
+
 private:
+    struct Feeling
+    {
+        float score = 0.0f;
+        uint32 familiarity = 0;
+    };
+
     struct Data
     {
         std::unordered_map<uint32, std::unordered_set<uint32>> pulls;  // guild id -> zone ids
         std::unordered_map<uint64, float> stances;                     // PairKey -> -100 .. 100
+        // Regard gate only (plans/18 P2):
+        std::unordered_map<uint64, Feeling> towardPlayers;             // (bot << 32) | real player -> feeling
+        std::unordered_map<uint64, uint32> friendsInside;              // (bot << 32) | guild -> members it likes
+        std::unordered_map<uint64, uint32> enemiesInside;              // (bot << 32) | guild -> members it hates
+        bool answerTable = false;
     };
 
     static bool Enabled();

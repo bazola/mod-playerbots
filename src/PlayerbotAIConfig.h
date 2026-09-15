@@ -363,6 +363,14 @@ public:
     int32 companyRivalStance;
     uint32 companyRivalDeclineChance;
     uint32 companyRivalDuelChance;
+    // local: company regard gate (custom wow plans/18, step P2); regard -100 .. 100
+    bool companyRegardGate;
+    int32 companySignRegard;
+    uint32 companySignFamiliarity;
+    int32 companyJoinRegard;
+    int32 companyJoinFriendRegard;
+    int32 companyFriendRegard;
+    int32 companyEnemyRegard;
     bool limitTalentsExpansion;
     uint32 botActiveAlone;
     uint32 BotActiveAloneDurationSeconds;
