@@ -2833,6 +2833,10 @@ std::vector<Player*> PlayerbotAI::GetAllPlayersInGroup()
     return members;
 }
 
+// Local patch (custom-wow): mod-ledger records these raw-packet / channel sends,
+// which bypass the OnPlayerCanUseChat hooks. Weak so this links without it.
+void LedgerRecordBotChat(Player* bot, uint32 type, std::string const& msg, Channel* channel) __attribute__((weak));
+
 bool PlayerbotAI::SayToGuild(std::string const& msg)
 {
     if (msg.empty())
@@ -2849,6 +2853,8 @@ bool PlayerbotAI::SayToGuild(std::string const& msg)
                 return false;
             }
             guild->BroadcastToGuild(bot->GetSession(), false, msg.c_str(), LANG_UNIVERSAL);
+            if (LedgerRecordBotChat)
+                LedgerRecordBotChat(bot, CHAT_MSG_GUILD, msg, nullptr);
             return true;
         }
     }
@@ -2871,6 +2877,8 @@ bool PlayerbotAI::SayToWorld(std::string const& msg)
     if (Channel* worldChannel = cMgr->GetChannel("World", bot))
     {
         worldChannel->Say(bot->GetGUID(), msg.c_str(), LANG_UNIVERSAL);
+        if (LedgerRecordBotChat)
+            LedgerRecordBotChat(bot, CHAT_MSG_CHANNEL, msg, worldChannel);
         return true;
     }
 
@@ -2924,6 +2932,8 @@ bool PlayerbotAI::SayToChannel(std::string const& msg, ChatChannelId const& chan
             if (channel)
             {
                 channel->Say(bot->GetGUID(), msg.c_str(), LANG_UNIVERSAL);
+                if (LedgerRecordBotChat)
+                    LedgerRecordBotChat(bot, CHAT_MSG_CHANNEL, msg, channel);
                 return true;
             }
         }
@@ -2946,6 +2956,9 @@ bool PlayerbotAI::SayToParty(std::string const& msg)
         ServerFacade::instance().SendPacket(receiver, &data);
     }
 
+    if (LedgerRecordBotChat)
+        LedgerRecordBotChat(bot, CHAT_MSG_PARTY, msg, nullptr);
+
     return true;
 }
 
@@ -2962,6 +2975,9 @@ bool PlayerbotAI::SayToRaid(std::string const& msg)
     {
         ServerFacade::instance().SendPacket(receiver, &data);
     }
+
+    if (LedgerRecordBotChat)
+        LedgerRecordBotChat(bot, CHAT_MSG_RAID, msg, nullptr);
 
     return true;
 }
