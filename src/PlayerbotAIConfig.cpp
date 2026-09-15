@@ -691,6 +691,9 @@ bool PlayerbotAIConfig::Initialize()
     companyJoinFriendRegard = sConfigMgr->GetOption<int32>("AiPlayerbot.CompanyJoinFriendRegard", 15);
     companyFriendRegard = sConfigMgr->GetOption<int32>("AiPlayerbot.CompanyFriendRegard", 40);
     companyEnemyRegard = sConfigMgr->GetOption<int32>("AiPlayerbot.CompanyEnemyRegard", -40);
+    // local: company actions (custom wow plans/18, step P4)
+    companyActions = sConfigMgr->GetOption<bool>("AiPlayerbot.CompanyActions", false);
+    companyActionDistance = sConfigMgr->GetOption<uint32>("AiPlayerbot.CompanyActionDistance", 30);
     limitTalentsExpansion = sConfigMgr->GetOption<bool>("AiPlayerbot.LimitTalentsExpansion", 0);
     botActiveAlone = sConfigMgr->GetOption<int32>("AiPlayerbot.BotActiveAlone", 10);
     BotActiveAloneDurationSeconds = sConfigMgr->GetOption<int32>("AiPlayerbot.BotActiveAloneDurationSeconds", 30);

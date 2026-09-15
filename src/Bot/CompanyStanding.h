@@ -17,9 +17,12 @@
 #include <atomic>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
+class Guild;
 class Player;
 class PlayerbotAI;
 
@@ -68,6 +71,20 @@ private:
         uint32 familiarity = 0;
     };
 
+    // local: company actions (custom wow plans/18, step P4). regard.py decides that a company invites, raises,
+    // lowers or casts out a real player (company_action); with AiPlayerbot.CompanyActions = 1 an officer bot of
+    // the company carries it out through its own session, face to face while nearOnly is set.
+    struct CompanyAction
+    {
+        uint32 id = 0;
+        uint32 guildId = 0;
+        uint32 playerGuid = 0;
+        uint32 preferGuid = 0;
+        uint8 kind = 0;
+        bool nearOnly = true;
+        std::string words;
+    };
+
     struct Data
     {
         std::unordered_map<uint32, std::unordered_set<uint32>> pulls;  // guild id -> zone ids
@@ -77,11 +94,18 @@ private:
         std::unordered_map<uint64, uint32> friendsInside;              // (bot << 32) | guild -> members it likes
         std::unordered_map<uint64, uint32> enemiesInside;              // (bot << 32) | guild -> members it hates
         bool answerTable = false;
+        // Company actions only (plans/18 P4): the rows not yet done.
+        std::vector<CompanyAction> actions;
     };
 
     static bool Enabled();
     void Load();
     std::shared_ptr<Data const> Snapshot() const;
+
+    // World thread, every few seconds: carry out each pending action an able officer is placed to.
+    void ActOnCompanyActions();
+    Player* FindActor(Guild* guild, Player* player, CompanyAction const& action, uint8 playerRank) const;
+    void FinishAction(CompanyAction const& action, Player* actor, char const* result);
 
     mutable std::mutex _mutex;
     std::shared_ptr<Data const> _data;
@@ -91,6 +115,9 @@ private:
 
     std::mutex _rollMutex;
     std::unordered_map<ObjectGuid::LowType, uint32> _lastDuelRoll;
+
+    uint32 _lastActionCheck = 0;
+    std::unordered_set<uint32> _finishedActions;  // world thread only; kept until the snapshot drops the row
 };
 
 #endif

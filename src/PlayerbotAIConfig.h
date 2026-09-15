@@ -371,6 +371,9 @@ public:
     int32 companyJoinFriendRegard;
     int32 companyFriendRegard;
     int32 companyEnemyRegard;
+    // local: company actions (custom wow plans/18, step P4)
+    bool companyActions;
+    uint32 companyActionDistance;
     bool limitTalentsExpansion;
     uint32 botActiveAlone;
     uint32 BotActiveAloneDurationSeconds;

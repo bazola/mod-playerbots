@@ -8,7 +8,10 @@
 #include "ChatHelper.h"
 #include "DatabaseEnv.h"
 #include "Event.h"
+#include "Guild.h"
+#include "GuildMgr.h"
 #include "ObjectAccessor.h"
+#include "Opcodes.h"
 #include "Player.h"
 #include "PlayerbotAI.h"
 #include "PlayerbotAIConfig.h"
@@ -16,6 +19,8 @@
 #include "Random.h"
 #include "Timer.h"
 #include "World.h"
+#include "WorldPacket.h"
+#include "WorldSession.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -27,6 +32,30 @@ namespace
     constexpr float RIVAL_CHALLENGE_DISTANCE = 30.0f;
     constexpr int32 RIVAL_LEVEL_GAP = 5;
     constexpr uint32 SPELL_DUEL = 7266;
+    constexpr uint32 ACTION_CHECK_INTERVAL_MS = 5000;
+    constexpr uint8 NOT_A_MEMBER = 0xFF;
+
+    enum ActionKind : uint8
+    {
+        ACTION_INVITE,
+        ACTION_PROMOTE,
+        ACTION_DEMOTE,
+        ACTION_REMOVE,
+        ACTION_UNKNOWN
+    };
+
+    ActionKind ParseAction(std::string const& text)
+    {
+        if (text == "invite")
+            return ACTION_INVITE;
+        if (text == "promote")
+            return ACTION_PROMOTE;
+        if (text == "demote")
+            return ACTION_DEMOTE;
+        if (text == "remove")
+            return ACTION_REMOVE;
+        return ACTION_UNKNOWN;
+    }
 
     uint64 PairKey(uint32 a, uint32 b)
     {
@@ -55,13 +84,16 @@ CompanyStanding& CompanyStanding::instance()
 bool CompanyStanding::Enabled()
 {
     return sPlayerbotAIConfig.companySeatTeleportChance || sPlayerbotAIConfig.companyRivalDeclineChance ||
-           sPlayerbotAIConfig.companyRivalDuelChance || sPlayerbotAIConfig.companyRegardGate;
+           sPlayerbotAIConfig.companyRivalDuelChance || sPlayerbotAIConfig.companyRegardGate ||
+           sPlayerbotAIConfig.companyActions;
 }
 
 void CompanyStanding::Update()
 {
     if (!Enabled())
         return;
+
+    ActOnCompanyActions();
 
     uint32 const now = getMSTime();
     uint32 const interval = std::max<uint32>(30, sPlayerbotAIConfig.companyRefreshSeconds) * IN_MILLISECONDS;
@@ -173,6 +205,30 @@ void CompanyStanding::Load()
         }
 
         data->answerTable = TableExists("company_answer");
+    }
+
+    // local: company actions (custom wow plans/18, step P4).
+    if (sPlayerbotAIConfig.companyActions && TableExists("company_action"))
+    {
+        if (QueryResult result = CharacterDatabase.Query(
+                "SELECT id, guildid, player_guid, COALESCE(prefer_guid, 0), action, near_only, words "
+                "FROM company_action WHERE done_at IS NULL ORDER BY id"))
+        {
+            do
+            {
+                Field* f = result->Fetch();
+                CompanyAction action;
+                action.id = uint32(f[0].Get<uint64>());
+                action.guildId = f[1].Get<uint32>();
+                action.playerGuid = f[2].Get<uint32>();
+                action.preferGuid = f[3].Get<uint32>();
+                action.kind = ParseAction(f[4].Get<std::string>());
+                action.nearOnly = f[5].Get<int8>() != 0;
+                action.words = f[6].Get<std::string>();
+                if (action.kind != ACTION_UNKNOWN)
+                    data->actions.push_back(std::move(action));
+            } while (result->NextRow());
+        }
     }
 
     std::lock_guard<std::mutex> lock(_mutex);
@@ -343,4 +399,123 @@ void CompanyStanding::RecordAnswer(Player* bot, Player* from, char const* kind, 
         "INSERT INTO company_answer (bot_guid, player_guid, guildid, kind, accepted, reason) VALUES ({}, {}, {}, '{}', {}, '{}')",
         bot->GetGUID().GetCounter(), from->GetGUID().GetCounter(), guildId ? std::to_string(guildId) : "NULL", kind,
         accepted ? 1 : 0, reason);
+}
+
+void CompanyStanding::ActOnCompanyActions()
+{
+    if (!sPlayerbotAIConfig.companyActions)
+        return;
+
+    uint32 const now = getMSTime();
+    if (_lastActionCheck && getMSTimeDiff(_lastActionCheck, now) < ACTION_CHECK_INTERVAL_MS)
+        return;
+    _lastActionCheck = now ? now : 1;
+
+    auto data = Snapshot();
+    if (!data)
+        return;
+
+    for (CompanyAction const& action : data->actions)
+    {
+        if (_finishedActions.count(action.id))
+            continue;
+
+        // Until the player is about, the action waits.
+        Player* player = ObjectAccessor::FindConnectedPlayer(ObjectGuid::Create<HighGuid::Player>(action.playerGuid));
+        if (!player || !player->IsInWorld())
+            continue;
+
+        Guild* guild = sGuildMgr->GetGuildById(action.guildId);
+        if (!guild)
+        {
+            FinishAction(action, nullptr, "gone");
+            continue;
+        }
+
+        Guild::Member const* member = guild->GetMember(player->GetGUID());
+        bool const moot = action.kind == ACTION_INVITE ? (player->GetGuildId() || player->GetGuildIdInvited()) : !member;
+        if (moot)
+        {
+            FinishAction(action, nullptr, "moot");
+            continue;
+        }
+
+        Player* actor = FindActor(guild, player, action, member ? member->GetRankId() : NOT_A_MEMBER);
+        if (!actor)
+            continue;
+
+        uint16 const opcode = action.kind == ACTION_INVITE    ? CMSG_GUILD_INVITE
+                              : action.kind == ACTION_PROMOTE ? CMSG_GUILD_PROMOTE
+                              : action.kind == ACTION_DEMOTE  ? CMSG_GUILD_DEMOTE
+                                                              : CMSG_GUILD_REMOVE;
+
+        // The officer says why before it is done; the core then sends the invite dialog or tells the company.
+        if (!action.words.empty())
+            actor->Whisper(action.words, LANG_UNIVERSAL, player);
+
+        WorldPacket* packet = new WorldPacket(opcode);  // QueuePacket takes ownership
+        *packet << player->GetName();
+        actor->GetSession()->QueuePacket(packet);
+
+        LOG_INFO("playerbots", "Company action {}: {} <{}> {} {} for {}", action.id, actor->GetName(), guild->GetName(),
+                 opcode == CMSG_GUILD_INVITE ? "invites" : opcode == CMSG_GUILD_PROMOTE ? "promotes"
+                 : opcode == CMSG_GUILD_DEMOTE ? "demotes" : "removes", player->GetName(),
+                 action.nearOnly ? "face to face" : "by word");
+        FinishAction(action, actor, "sent");
+    }
+}
+
+// A bot of the company, alive and out of combat, whose rank has the right and stands high enough for the core to
+// allow it: raise only to below its own rank, lower or cast out only those below it. The preferred member wins.
+Player* CompanyStanding::FindActor(Guild* guild, Player* player, CompanyAction const& action, uint8 playerRank) const
+{
+    uint32 const right = action.kind == ACTION_INVITE    ? GR_RIGHT_INVITE
+                         : action.kind == ACTION_PROMOTE ? GR_RIGHT_PROMOTE
+                         : action.kind == ACTION_DEMOTE  ? GR_RIGHT_DEMOTE
+                                                         : GR_RIGHT_REMOVE;
+    float const distance = float(sPlayerbotAIConfig.companyActionDistance);
+
+    Player* found = nullptr;
+    for (auto const& [guid, other] : ObjectAccessor::GetPlayers())
+    {
+        if (!other || other == player || !other->IsInWorld() || other->GetGuildId() != action.guildId ||
+            !GET_PLAYERBOT_AI(other))
+            continue;
+
+        if (!other->IsAlive() || other->IsInCombat())
+            continue;
+
+        Guild::Member const* member = guild->GetMember(other->GetGUID());
+        if (!member)
+            continue;
+
+        uint8 const rank = member->GetRankId();
+        if (!(guild->GetRankRights(rank) & right))
+            continue;
+
+        if (action.kind == ACTION_PROMOTE && int32(rank) + 1 >= int32(playerRank))
+            continue;
+
+        if ((action.kind == ACTION_DEMOTE || action.kind == ACTION_REMOVE) && rank >= playerRank)
+            continue;
+
+        if (action.nearOnly && (other->GetMapId() != player->GetMapId() || !other->IsWithinDistInMap(player, distance)))
+            continue;
+
+        if (other->GetGUID().GetCounter() == action.preferGuid)
+            return other;
+
+        if (!found)
+            found = other;
+    }
+
+    return found;
+}
+
+void CompanyStanding::FinishAction(CompanyAction const& action, Player* actor, char const* result)
+{
+    _finishedActions.insert(action.id);
+    CharacterDatabase.Execute("UPDATE company_action SET done_at = NOW(), result = '{}', actor_guid = {} "
+                              "WHERE id = {} AND done_at IS NULL",
+                              result, actor ? std::to_string(actor->GetGUID().GetCounter()) : "NULL", action.id);
 }
