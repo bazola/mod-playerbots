@@ -104,6 +104,8 @@ private:
 
     // World thread, every few seconds: carry out each pending action an able officer is placed to.
     void ActOnCompanyActions();
+    // plans/18 P6: leave and whisper rows are carried out by the bot named in prefer_guid itself.
+    void ActAsSelf(CompanyAction const& action);
     Player* FindActor(Guild* guild, Player* player, CompanyAction const& action, uint8 playerRank) const;
     void FinishAction(CompanyAction const& action, Player* actor, char const* result);
 

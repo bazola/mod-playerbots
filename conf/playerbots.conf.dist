@@ -807,8 +807,9 @@ AiPlayerbot.CompanyFriendRegard = 40
 AiPlayerbot.CompanyEnemyRegard = -40
 
 # Local patch: company actions. An outside service writes company_action rows (invite, promote, demote, remove a
-# real player); an officer bot of that company with the rank to do it carries each out through its own session,
-# whispering the row's words first. Rows marked near_only wait until such an officer is within
+# player); an officer bot of that company with the rank to do it carries each out through its own session,
+# whispering the row's words first. leave and whisper rows are carried out by the bot named in the row itself (a
+# bot never leaves a bot-led company of 8 or fewer, nor one it leads). Rows marked near_only wait until such an officer is within
 # CompanyActionDistance yards of the player. Pending rows are read with the standing (CompanyRefreshSeconds).
 # 0 = off.
 # Default: 0, 30

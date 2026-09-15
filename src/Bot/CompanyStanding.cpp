@@ -5,6 +5,7 @@
 #include "CompanyStanding.h"
 
 #include "AiObjectContext.h"
+#include "CharacterCache.h"
 #include "ChatHelper.h"
 #include "DatabaseEnv.h"
 #include "Event.h"
@@ -35,12 +36,16 @@ namespace
     constexpr uint32 ACTION_CHECK_INTERVAL_MS = 5000;
     constexpr uint8 NOT_A_MEMBER = 0xFF;
 
+    constexpr uint32 COMPANY_FLOOR = 8;   // plans/18 §6b: a bot-led company never falls below this by a leaving
+
     enum ActionKind : uint8
     {
         ACTION_INVITE,
         ACTION_PROMOTE,
         ACTION_DEMOTE,
         ACTION_REMOVE,
+        ACTION_LEAVE,     // plans/18 P6: the bot itself leaves its company
+        ACTION_WHISPER,   // plans/18 P6: the bot itself says something to the player (e.g. why it turned them down)
         ACTION_UNKNOWN
     };
 
@@ -54,6 +59,10 @@ namespace
             return ACTION_DEMOTE;
         if (text == "remove")
             return ACTION_REMOVE;
+        if (text == "leave")
+            return ACTION_LEAVE;
+        if (text == "whisper")
+            return ACTION_WHISPER;
         return ACTION_UNKNOWN;
     }
 
@@ -420,6 +429,12 @@ void CompanyStanding::ActOnCompanyActions()
         if (_finishedActions.count(action.id))
             continue;
 
+        if (action.kind == ACTION_LEAVE || action.kind == ACTION_WHISPER)
+        {
+            ActAsSelf(action);
+            continue;
+        }
+
         // Until the player is about, the action waits.
         Player* player = ObjectAccessor::FindConnectedPlayer(ObjectGuid::Create<HighGuid::Player>(action.playerGuid));
         if (!player || !player->IsInWorld())
@@ -463,6 +478,51 @@ void CompanyStanding::ActOnCompanyActions()
                  action.nearOnly ? "face to face" : "by word");
         FinishAction(action, actor, "sent");
     }
+}
+
+// plans/18 P6. The bot named in prefer_guid acts for itself: a whisper waits until both it and the player are about; a
+// leaving waits for the bot, whispers the player first if they are about, and is moot for a company's leader or one
+// that would fall below the floor while a bot leads it.
+void CompanyStanding::ActAsSelf(CompanyAction const& action)
+{
+    Player* actor = ObjectAccessor::FindConnectedPlayer(ObjectGuid::Create<HighGuid::Player>(action.preferGuid));
+    if (!actor || !actor->IsInWorld() || !GET_PLAYERBOT_AI(actor))
+        return;
+
+    Player* player = ObjectAccessor::FindConnectedPlayer(ObjectGuid::Create<HighGuid::Player>(action.playerGuid));
+    bool const playerAbout = player && player->IsInWorld();
+
+    if (action.kind == ACTION_WHISPER)
+    {
+        if (!playerAbout)
+            return;
+
+        if (!action.words.empty())
+            actor->Whisper(action.words, LANG_UNIVERSAL, player);
+        FinishAction(action, actor, "sent");
+        return;
+    }
+
+    Guild* guild = sGuildMgr->GetGuildById(action.guildId);
+    if (!guild || actor->GetGuildId() != action.guildId || guild->GetLeaderGUID() == actor->GetGUID())
+    {
+        FinishAction(action, nullptr, "moot");
+        return;
+    }
+
+    uint32 const leaderAccount = sCharacterCache->GetCharacterAccountIdByGuid(guild->GetLeaderGUID());
+    if (sPlayerbotAIConfig.IsInRandomAccountList(leaderAccount) && guild->GetMemberCount() <= COMPANY_FLOOR)
+    {
+        FinishAction(action, nullptr, "moot");
+        return;
+    }
+
+    if (playerAbout && !action.words.empty())
+        actor->Whisper(action.words, LANG_UNIVERSAL, player);
+
+    actor->GetSession()->QueuePacket(new WorldPacket(CMSG_GUILD_LEAVE));  // QueuePacket takes ownership
+    LOG_INFO("playerbots", "Company action {}: {} leaves <{}>", action.id, actor->GetName(), guild->GetName());
+    FinishAction(action, actor, "sent");
 }
 
 // A bot of the company, alive and out of combat, whose rank has the right and stands high enough for the core to
