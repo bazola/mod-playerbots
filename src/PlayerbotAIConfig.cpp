@@ -694,6 +694,11 @@ bool PlayerbotAIConfig::Initialize()
     // local: company actions (custom wow plans/18, step P4)
     companyActions = sConfigMgr->GetOption<bool>("AiPlayerbot.CompanyActions", false);
     companyActionDistance = sConfigMgr->GetOption<uint32>("AiPlayerbot.CompanyActionDistance", 30);
+    // local: company defection (custom wow plans/18, step P7)
+    companyDefectChance = std::min<uint32>(sConfigMgr->GetOption<uint32>("AiPlayerbot.CompanyDefectChance", 0), 100);
+    companyDefectRegard = sConfigMgr->GetOption<int32>("AiPlayerbot.CompanyDefectRegard", 50);
+    companyDefectAttachment = sConfigMgr->GetOption<int32>("AiPlayerbot.CompanyDefectAttachment", 0);
+    companyFloor = sConfigMgr->GetOption<uint32>("AiPlayerbot.CompanyFloor", 8);
     limitTalentsExpansion = sConfigMgr->GetOption<bool>("AiPlayerbot.LimitTalentsExpansion", 0);
     botActiveAlone = sConfigMgr->GetOption<int32>("AiPlayerbot.BotActiveAlone", 10);
     BotActiveAloneDurationSeconds = sConfigMgr->GetOption<int32>("AiPlayerbot.BotActiveAloneDurationSeconds", 30);

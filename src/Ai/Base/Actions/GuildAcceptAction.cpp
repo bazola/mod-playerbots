@@ -45,11 +45,28 @@ bool GuildAcceptAction::Execute(Event event)
     }
     else if (bot->GetGuildId())
     {
-        if (!weigh)
+        // local: company defection (custom wow plans/18, step P7). A guilded bot may leave its company for a real
+        // player's; the security check runs first, and the core's own leaving and joining do the rest.
+        CompanyStanding::Verdict verdict{false, "in_company"};
+        if (weigh && sPlayerbotAIConfig.companyDefectChance &&
+            botAI->GetSecurity()->CheckLevelFor(PLAYERBOT_SECURITY_INVITE, true, inviter, true))
+            verdict = CompanyStanding::instance().JudgeDefection(bot, inviter, guildId);
+
+        if (verdict.accept)
+        {
+            WorldPackets::Guild::GuildLeave leave = WorldPacket(CMSG_GUILD_LEAVE);
+            bot->GetSession()->HandleGuildLeaveOpcode(leave);
+            if (bot->GetGuildId())   // the core would not let it go
+                verdict = {false, "needed"};
+        }
+        else if (!weigh)
+        {
             botAI->TellError(PlayerbotTextMgr::instance().GetBotTextOrDefault(
                 "guild_accept_already_in_guild", "Sorry, I am in a guild already", {}));
-        reason = "in_company";
-        accept = false;
+        }
+
+        reason = verdict.reason;
+        accept = verdict.accept;
     }
     else if (!botAI->GetSecurity()->CheckLevelFor(PLAYERBOT_SECURITY_INVITE, weigh, inviter, true))
     {

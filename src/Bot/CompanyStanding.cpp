@@ -36,7 +36,7 @@ namespace
     constexpr uint32 ACTION_CHECK_INTERVAL_MS = 5000;
     constexpr uint8 NOT_A_MEMBER = 0xFF;
 
-    constexpr uint32 COMPANY_FLOOR = 8;   // plans/18 §6b: a bot-led company never falls below this by a leaving
+    constexpr uint32 DEFECT_ROLL_INTERVAL_MS = 6 * HOUR * IN_MILLISECONDS;
 
     enum ActionKind : uint8
     {
@@ -214,6 +214,31 @@ void CompanyStanding::Load()
         }
 
         data->answerTable = TableExists("company_answer");
+
+        // local: company defection (custom wow plans/18, step P7).
+        if (sPlayerbotAIConfig.companyDefectChance)
+        {
+            if (QueryResult result = CharacterDatabase.Query(
+                    "SELECT r.bot_guid, AVG(r.score) FROM regard r JOIN guild_member mb ON mb.guid = r.bot_guid "
+                    "JOIN guild_member mo ON mo.guid = r.other_guid AND mo.guildid = mb.guildid GROUP BY r.bot_guid"))
+            {
+                do
+                {
+                    Field* f = result->Fetch();
+                    data->attachment[f[0].Get<uint32>()] = float(f[1].Get<double>());
+                } while (result->NextRow());
+            }
+
+            if (QueryResult result = CharacterDatabase.Query(
+                    "SELECT guildid, CAST(SUM(`rank` = 1) AS UNSIGNED) FROM guild_member GROUP BY guildid"))
+            {
+                do
+                {
+                    Field* f = result->Fetch();
+                    data->officers[f[0].Get<uint32>()] = uint32(f[1].Get<uint64>());
+                } while (result->NextRow());
+            }
+        }
     }
 
     // local: company actions (custom wow plans/18, step P4).
@@ -397,6 +422,71 @@ CompanyStanding::Verdict CompanyStanding::JudgeInvite(Player* bot, Player* from,
     return {false, "not_enough"};
 }
 
+CompanyStanding::Verdict CompanyStanding::JudgeDefection(Player* bot, Player* from, uint32 guildId) const
+{
+    auto data = Snapshot();
+    uint32 const botGuid = bot->GetGUID().GetCounter();
+    Feeling feeling;
+    float attachment = 20.0f;   // no feelings recorded about its own people: the same-company baseline
+    uint32 enemies = 0;
+    uint32 officers = 0;
+    if (data)
+    {
+        auto it = data->towardPlayers.find(FeelerKey(botGuid, from->GetGUID().GetCounter()));
+        if (it != data->towardPlayers.end())
+            feeling = it->second;
+
+        auto attached = data->attachment.find(botGuid);
+        if (attached != data->attachment.end())
+            attachment = attached->second;
+
+        auto enemyIt = data->enemiesInside.find(FeelerKey(botGuid, guildId));
+        if (enemyIt != data->enemiesInside.end())
+            enemies = enemyIt->second;
+
+        auto officerIt = data->officers.find(bot->GetGuildId());
+        if (officerIt != data->officers.end())
+            officers = officerIt->second;
+    }
+
+    if (feeling.score <= float(sPlayerbotAIConfig.companyEnemyRegard))
+        return {false, "dislikes"};
+
+    if (enemies)
+        return {false, "enemy_inside"};
+
+    if (feeling.score < float(sPlayerbotAIConfig.companyDefectRegard))
+        return {false, "loyal"};
+
+    if (attachment >= float(sPlayerbotAIConfig.companyDefectAttachment))
+        return {false, "attached"};
+
+    Guild* own = sGuildMgr->GetGuildById(bot->GetGuildId());
+    if (!own)
+        return {false, "in_company"};
+
+    if (own->GetLeaderGUID() == bot->GetGUID())
+        return {false, "leads"};
+
+    // A company a bot leads (a seeded one) keeps its floor and its last officer (plans/18 §6b).
+    if (sPlayerbotAIConfig.IsInRandomAccountList(sCharacterCache->GetCharacterAccountIdByGuid(own->GetLeaderGUID())))
+    {
+        Guild::Member const* member = own->GetMember(bot->GetGUID());
+        bool const lastOfficer = member && member->GetRankId() == GR_OFFICER && officers <= 1;
+        if (own->GetMemberCount() <= sPlayerbotAIConfig.companyFloor || lastOfficer)
+            return {false, "needed"};
+    }
+
+    uint32 const now = getMSTime();
+    uint64 const key = FeelerKey(botGuid, from->GetGUID().GetCounter());
+    std::lock_guard<std::mutex> lock(_defectMutex);
+    auto roll = _defectRolls.find(key);
+    if (roll == _defectRolls.end() || getMSTimeDiff(roll->second.first, now) >= DEFECT_ROLL_INTERVAL_MS)
+        roll = _defectRolls.insert_or_assign(key, std::make_pair(now, urand(0, 99) < sPlayerbotAIConfig.companyDefectChance)).first;
+
+    return roll->second.second ? Verdict{true, "defects"} : Verdict{false, "stays"};
+}
+
 void CompanyStanding::RecordAnswer(Player* bot, Player* from, char const* kind, uint32 guildId, bool accepted,
                                    char const* reason) const
 {
@@ -511,7 +601,7 @@ void CompanyStanding::ActAsSelf(CompanyAction const& action)
     }
 
     uint32 const leaderAccount = sCharacterCache->GetCharacterAccountIdByGuid(guild->GetLeaderGUID());
-    if (sPlayerbotAIConfig.IsInRandomAccountList(leaderAccount) && guild->GetMemberCount() <= COMPANY_FLOOR)
+    if (sPlayerbotAIConfig.IsInRandomAccountList(leaderAccount) && guild->GetMemberCount() <= sPlayerbotAIConfig.companyFloor)
     {
         FinishAction(action, nullptr, "moot");
         return;

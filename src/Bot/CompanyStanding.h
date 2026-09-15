@@ -64,6 +64,13 @@ public:
     // Async insert into company_answer when the table exists. kind is "sign" or "join"; guildId 0 for a charter.
     void RecordAnswer(Player* bot, Player* from, char const* kind, uint32 guildId, bool accepted, char const* reason) const;
 
+    // local: company defection (custom wow plans/18, step P7). A guilded bot answering a real player's company invite
+    // leaves its own company for theirs: regard for the player at least CompanyDefectRegard, attachment (mean regard
+    // for its own company's members; none recorded counts as +20) below CompanyDefectAttachment, nobody it hates
+    // inside, a company that can spare it (never its leader; a bot-led company keeps more than CompanyFloor members
+    // and its last officer), and CompanyDefectChance, rolled once per bot and player every 6 hours. World thread.
+    Verdict JudgeDefection(Player* bot, Player* from, uint32 guildId) const;
+
 private:
     struct Feeling
     {
@@ -94,6 +101,9 @@ private:
         std::unordered_map<uint64, uint32> friendsInside;              // (bot << 32) | guild -> members it likes
         std::unordered_map<uint64, uint32> enemiesInside;              // (bot << 32) | guild -> members it hates
         bool answerTable = false;
+        // Company defection only (plans/18 P7):
+        std::unordered_map<uint32, float> attachment;   // bot -> mean regard for its own company's members
+        std::unordered_map<uint32, uint32> officers;    // guild id -> members at officer rank
         // Company actions only (plans/18 P4): the rows not yet done.
         std::vector<CompanyAction> actions;
     };
@@ -120,6 +130,10 @@ private:
 
     uint32 _lastActionCheck = 0;
     std::unordered_set<uint32> _finishedActions;  // world thread only; kept until the snapshot drops the row
+
+    // plans/18 P7: FeelerKey(bot, player) -> (getMSTime of the roll, whether it defects); one roll per 6 hours.
+    mutable std::mutex _defectMutex;
+    mutable std::unordered_map<uint64, std::pair<uint32, bool>> _defectRolls;
 };
 
 #endif

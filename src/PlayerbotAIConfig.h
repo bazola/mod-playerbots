@@ -374,6 +374,11 @@ public:
     // local: company actions (custom wow plans/18, step P4)
     bool companyActions;
     uint32 companyActionDistance;
+    // local: company defection (custom wow plans/18, step P7)
+    uint32 companyDefectChance;
+    int32 companyDefectRegard;
+    int32 companyDefectAttachment;
+    uint32 companyFloor;
     bool limitTalentsExpansion;
     uint32 botActiveAlone;
     uint32 BotActiveAloneDurationSeconds;

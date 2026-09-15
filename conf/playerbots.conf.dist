@@ -816,6 +816,18 @@ AiPlayerbot.CompanyEnemyRegard = -40
 AiPlayerbot.CompanyActions = 0
 AiPlayerbot.CompanyActionDistance = 30
 
+# Local patch: company defection (needs CompanyRegardGate). A guilded bot answering a real player's guild invite
+# leaves its own guild for theirs when its regard for the player is at least CompanyDefectRegard, its mean regard for
+# its own guild's members (attachment; none recorded counts as +20) is below CompanyDefectAttachment, nobody it hates
+# is in the player's guild, and CompanyDefectChance passes (rolled once per bot and player every 6 hours). It never
+# leaves a guild it leads; from a guild led by a bot it never takes the guild to CompanyFloor members or fewer, nor
+# its last officer. CompanyFloor also stops company-action leavings. 0 chance = stock (a guilded bot declines).
+# Default: 0, 50, 0, 8
+AiPlayerbot.CompanyDefectChance = 0
+AiPlayerbot.CompanyDefectRegard = 50
+AiPlayerbot.CompanyDefectAttachment = 0
+AiPlayerbot.CompanyFloor = 8
+
 # Enable simulated expansion limitation for talents and glyphs
 # If enabled, limits talent trees to 6 rows plus the middle talent of the 7th row for bots until level 61
 # and 8 rows plus the middle talent of the 9th row for bots from level 61 until level 71
