@@ -622,7 +622,8 @@ AiPlayerbot.AutoGearScoreLimit = 0
 
 # local (custom-wow plan 27): chat command ".playerbots bot <name> catchup".
 # Raises one of YOUR OWN account's characters to your level so it can travel with you.
-# It grants the level and nothing else: no gear change, no inventory change, no quest change.
+# It grants the level, and the 28 class spells that only a quest can give (druid forms, priest racials,
+# rogue poisons and the like). No gear change, no inventory change, no quest is completed.
 # Follow it with "maintenance" (skills, spells, talents, mounts) and "autogear match" (gear).
 # It never lowers a level, never touches another player's character, and is refused in combat.
 # Default: 0 (disabled)
