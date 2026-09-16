@@ -142,14 +142,22 @@ bool FindCorpseAction::Execute(Event /*event*/)
             moveToPos = leaderPos;
         else
         {
-            FleeManager manager(bot, reclaimDist, 0.0, urand(0, 1), moveToPos);
+            // local: both of these were urand(0, 1), drawn fresh on every tick,
+            // so the safe spot a bot was walking toward moved under it each
+            // pass and it never arrived -- the wandering you see beside a
+            // corpse. One draw per corpse instead: steady for the length of a
+            // walk back, different the next time the same person dies.
+            bool const spread =
+                ((bot->GetGUID().GetCounter() + uint32(corpse->GetGhostTime())) & 1) != 0;
+
+            FleeManager manager(bot, reclaimDist, 0.0, spread, moveToPos);
 
             if (manager.isUseful())
             {
                 float rx, ry, rz;
                 if (manager.CalculateDestination(&rx, &ry, &rz))
                     moveToPos = WorldPosition(moveToPos.GetMapId(), rx, ry, rz, 0.0);
-                else if (!moveToPos.GetReachableRandomPointOnGround(bot, reclaimDist, urand(0, 1)))
+                else if (!moveToPos.GetReachableRandomPointOnGround(bot, reclaimDist, spread))
                     moveToPos = corpsePos;
             }
         }
@@ -179,7 +187,7 @@ bool FindCorpseAction::Execute(Event /*event*/)
             moved = true;
         else
         {
-            if (deadTime < 10 * MINUTE && dCount < 5)  // Look for corpse up to 30 minutes.
+            if (deadTime < 10 * MINUTE && dCount < 5)  // Look for corpse up to 10 minutes.
             {
                 moved =
                     MoveTo(moveToPos.GetMapId(), moveToPos.GetPositionX(), moveToPos.GetPositionY(), moveToPos.GetPositionZ(), false, false);
@@ -306,6 +314,13 @@ bool SpiritHealerAction::Execute(Event /*event*/)
     GraveyardStruct const* ClosestGrave =
         GetGrave(dCount > 10 || deadTime > 15 * MINUTE || AI_VALUE(uint8, "durability") < 10);
 
+    // local: GetGrave returns nothing when no graveyard anywhere matches the
+    // bot's team -- its final loop simply never assigns. The null check used to
+    // sit thirty lines below, after the block that reads the coordinates, so a
+    // grave that could not be found was a crash rather than a refusal.
+    if (!ClosestGrave)
+        return false;
+
     if (bot->GetDistance2d(ClosestGrave->x, ClosestGrave->y) < sPlayerbotAIConfig.sightDistance)
     {
         GuidVector npcs = AI_VALUE(GuidVector, "nearest npcs");
@@ -329,11 +344,6 @@ bool SpiritHealerAction::Execute(Event /*event*/)
                 return true;
             }
         }
-    }
-
-    if (!ClosestGrave)
-    {
-        return false;
     }
 
     bool moved = false;

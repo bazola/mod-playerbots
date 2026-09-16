@@ -23,8 +23,15 @@ void DeadStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
                                        { NextAction("accept resurrect", relevance) }));
     triggers.push_back(
         new TriggerNode("falling far", { NextAction("repop", relevance + 1.f) }));
+    // local: this asked for "location stuck", which no context ever registers
+    // (only "move stuck", "move long stuck", "combat stuck" and "combat long
+    // stuck" exist). Engine::ProcessTriggers skips a name it cannot resolve
+    // without a word, so the one escape a wedged corpse-running bot had was
+    // dead code. "move stuck" is the match: five minutes in the same spot, and
+    // it holds off while a real player is master, which is exactly when a bot
+    // should keep walking back instead of giving up and taking the graveyard.
     triggers.push_back(
-        new TriggerNode("location stuck", { NextAction("repop", relevance + 1) }));
+        new TriggerNode("move stuck", { NextAction("repop", relevance + 1) }));
     triggers.push_back(new TriggerNode(
         "can self resurrect", { NextAction("self resurrect", relevance + 2.0f) }));
 }
