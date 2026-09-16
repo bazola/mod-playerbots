@@ -620,6 +620,14 @@ AiPlayerbot.AutoGearQualityLimit = 3
 # Default: 0 (no limit)
 AiPlayerbot.AutoGearScoreLimit = 0
 
+# local (custom-wow plan 27): chat command ".playerbots bot <name> catchup".
+# Raises one of YOUR OWN account's characters to your level so it can travel with you.
+# It grants the level and nothing else: no gear change, no inventory change, no quest change.
+# Follow it with "maintenance" (skills, spells, talents, mounts) and "autogear match" (gear).
+# It never lowers a level, never touches another player's character, and is refused in combat.
+# Default: 0 (disabled)
+AiPlayerbot.AltCatchUpCommand = 0
+
 # Enable/Disable cheats for bots
 # "food" (bots eat or drink without using food or drinks from their inventory)
 # "gold" (bots have infinite gold)

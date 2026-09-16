@@ -728,6 +728,42 @@ std::string const PlayerbotHolder::ProcessBotCommand(std::string const cmd, Obje
     if (!bot)
         return "bot not found";
 
+    // local: alt catch-up (custom-wow plan 27 §4). Raise one of the caller's OWN characters to their level so it
+    // can travel with them. Must sit above the addclass gate below, which would otherwise refuse it: an alt is by
+    // definition not an addclass bot. It grants the level and nothing else -- the player follows it with
+    // "maintenance" (skills, spells, talents, mounts) and "autogear match" (gear), both of which already work on
+    // alts. It deliberately does NOT go through PlayerbotFactory::Randomize, which clears the bags at any setting
+    // and replaces the player's bags (plan 27 §2).
+    if (cmd == "catchup")
+    {
+        if (!sPlayerbotAIConfig.altCatchUpCommand)
+            return "ERROR: The catchup command is disabled.";
+
+        Player* master = ObjectAccessor::FindConnectedPlayer(masterguid);
+        if (!master)
+            return "ERROR: You must be in the world to catch up one of your characters.";
+
+        uint32 botAccount = sCharacterCache->GetCharacterAccountIdByGuid(guid);
+        if (!botAccount || botAccount != masterAccountId)
+            return "ERROR: You can only catch up a character on your own account.";
+
+        if (master->IsInCombat() || bot->IsInCombat())
+            return "ERROR: You can not use this command during combat.";
+
+        // Raise only, never lower: de-levelling costs talents and skills, and a lower level is exactly what
+        // re-arms ClearAllItems in the factory.
+        uint32 target = std::min<uint32>(master->GetLevel(), sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL));
+        if (bot->GetLevel() >= target)
+            return "ERROR: That character is already at your level.";
+
+        bot->GiveLevel(target);
+        bot->SetUInt32Value(PLAYER_XP, 0);
+        bot->InitTalentForLevel();
+        bot->InitStatsForLevel(true);
+        bot->SaveToDB(false, false);
+        return "ok";
+    }
+
     bool addClassBot = sRandomPlayerbotMgr.IsAddclassBot(guid.GetCounter());
 
     if (!addClassBot)

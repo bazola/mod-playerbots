@@ -476,6 +476,7 @@ public:
             altMaintenanceGemsEnchants;
     int32 autoGearCommand, autoGearCommandAltBots, autoGearQualityLimit, autoGearScoreLimit;
     int32 autoGearBisCommand;
+    int32 altCatchUpCommand;  // local: alt catch-up (custom-wow plan 27)
 
     uint32 useGroundMountAtMinLevel;
     uint32 useFastGroundMountAtMinLevel;
