@@ -760,7 +760,70 @@ std::string const PlayerbotHolder::ProcessBotCommand(std::string const cmd, Obje
         bot->SetUInt32Value(PLAYER_XP, 0);
         bot->InitTalentForLevel();
         bot->InitStatsForLevel(true);
+
+        // local: alt catch-up -- the class abilities that only a quest can give (custom-wow plan 27 §6).
+        // Measured against the world DB: 269 Classic quests reward a spell, 91 are restricted to one class, 75
+        // reward a spell no trainer teaches, and those come to just 28 distinct spells once the per-race copies
+        // are folded together (Taming the Beast appears 8 times, Desperate Prayer 6).
+        // Everything else is already covered: "maintenance" runs InitAvailableSpells, which teaches every
+        // trainable spell, and InitClassSpells hardcodes the famous ones by level -- both warrior stances,
+        // Redemption, bear form, the warlock summons, the shaman totem spells, the hunter's pet abilities.
+        // Without these a caught-up character is subtly broken: a druid who cannot take aquatic form, a priest
+        // with none of their racial spells, a rogue who never learned to use poison.
+        struct CatchUpSpell
+        {
+            uint8 cls;
+            uint32 spellId;
+            uint32 minLevel;
+        };
+
+        static CatchUpSpell const catchUpSpells[] =
+        {
+            { CLASS_WARRIOR,  8121, 10 },  // Bartleby's Mug
+            { CLASS_WARRIOR,  8616, 30 },  // The Affray
+            { CLASS_PALADIN,  7329, 12 },  // The Tome of Divinity
+            { CLASS_PALADIN, 23215, 60 },  // Judgment and Redemption
+            { CLASS_HUNTER,   5300, 10 },  // Training the Beast
+            { CLASS_HUNTER,   1579, 10 },  // Taming the Beast
+            { CLASS_ROGUE,    2995, 20 },  // Klaven's Tower (poisons)
+            { CLASS_PRIEST,  19318, 10 },  // Touch of Weakness
+            { CLASS_PRIEST,  19350, 10 },  // Returning Home
+            { CLASS_PRIEST,  19338, 10 },  // Desperate Prayer
+            { CLASS_PRIEST,  19325, 10 },  // Hex of Weakness
+            { CLASS_PRIEST,  19345, 20 },  // Arcane Feedback
+            { CLASS_PRIEST,  19357, 20 },  // Elune's Grace
+            { CLASS_PRIEST,  19331, 20 },  // Shadowguard
+            // Verify live (plan 27 §6): the Call of * quests hand over totem ITEMS. Learning the spell may not be
+            // enough, in which case these four need InitQuests or the items adding instead.
+            { CLASS_SHAMAN,   8073,  4 },  // Call of Earth
+            { CLASS_SHAMAN,   2075, 10 },  // Call of Fire
+            { CLASS_SHAMAN,   5396, 20 },  // Call of Water
+            { CLASS_SHAMAN,   8385, 30 },  // Call of Air
+            { CLASS_MAGE,    12510, 50 },  // Magecraft
+            { CLASS_WARLOCK, 11520, 10 },  // The Binding
+            { CLASS_WARLOCK, 11519, 20 },  // The Binding
+            { CLASS_WARLOCK,  1373, 30 },  // The Binding
+            { CLASS_WARLOCK,  5785, 40 },  // Summon Felsteed
+            { CLASS_WARLOCK,  1413, 50 },  // Kroshius' Infernal Core
+            { CLASS_WARLOCK, 20700, 60 },  // Suppression
+            { CLASS_DRUID,   19179, 10 },  // Body and Heart
+            { CLASS_DRUID,    8947, 14 },  // Power over Poison
+            { CLASS_DRUID,    1446, 16 },  // Aquatic Form
+        };
+
+        uint32 learned = 0;
+        for (CatchUpSpell const& spell : catchUpSpells)
+        {
+            if (spell.cls != bot->getClass() || target < spell.minLevel || bot->HasSpell(spell.spellId))
+                continue;
+
+            bot->learnSpell(spell.spellId, false);
+            ++learned;
+        }
+
         bot->SaveToDB(false, false);
+        LOG_INFO("playerbots", "[Alt catch-up] {} raised to level {} for {}, {} quest-only class spells granted",
+            bot->GetName(), target, master->GetName(), learned);
         return "ok";
     }
 
