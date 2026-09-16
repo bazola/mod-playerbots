@@ -818,7 +818,13 @@ std::string const PlayerbotHolder::ProcessBotCommand(std::string const cmd, Obje
                 continue;
 
             bot->learnSpell(spell.spellId, false);
-            ++learned;
+            // Count what actually stuck, not what was attempted. The first live run (2026-09-16) logged
+            // "2 quest-only class spells granted" for a hunter while neither id reached character_spell:
+            // these are quest RewardSpell values, which for a teaching quest are the spell cast at turn-in
+            // rather than the ability itself. Until each id is confirmed on a live character of its class,
+            // the table is unproven and the log must not claim otherwise.
+            if (bot->HasSpell(spell.spellId))
+                ++learned;
         }
 
         bot->SaveToDB(false, false);
