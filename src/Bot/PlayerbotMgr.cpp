@@ -110,7 +110,15 @@ void PlayerbotHolder::AddPlayerBot(ObjectGuid playerGuid, uint32 masterAccountId
     std::ostringstream out;
     std::string botName;
     sCharacterCache->GetCharacterNameByGuid(playerGuid, botName);
-    if (!isRndbot && !sameAccount && !sameGuild && !addClassBot && !linkedAccount)
+    // local: no addclass (custom-wow). A pool character is never taken into a player's service, by any path --
+    // "add <name>", "addaccount", a guild or a linked account. Its login below would Randomize it to the master's
+    // level, and the pool holds the era's unstoried races. Checked first so no other permission can grant it.
+    if (!isRndbot && addClassBot)
+    {
+        allowed = false;
+        out << "Failure: " << botName.c_str() << " is in the addclass pool, which is closed on this realm";
+    }
+    else if (!isRndbot && !sameAccount && !sameGuild && !linkedAccount)
     {
         allowed = false;
         out << "Failure: You are not allowed to control bot " << botName.c_str();
@@ -593,19 +601,9 @@ void PlayerbotHolder::OnBotLogin(Player* const bot)
     }
 
     bot->SaveToDB(false, false);
-    bool addClassBot = sRandomPlayerbotMgr.IsAccountType(accountId, 2);
-    if (addClassBot && master && abs((int)master->GetLevel() - (int)bot->GetLevel()) > 3)
-    {
-        // PlayerbotFactory factory(bot, master->GetLevel());
-        // factory.Randomize(false);
-        uint32 mixedGearScore =
-            PlayerbotAI::GetMixedGearScore(master, true, false, 12) * sPlayerbotAIConfig.autoInitEquipLevelLimitRatio;
-        // work around: distinguish from 0 if no gear
-        if (mixedGearScore == 0)
-            mixedGearScore = 1;
-        PlayerbotFactory factory(bot, master->GetLevel(), ITEM_QUALITY_LEGENDARY, mixedGearScore);
-        factory.Randomize(false);
-    }
+    // local: no addclass (custom-wow). Stock Randomized an addclass bot here whenever its level was more than 3
+    // from its master's: gear, bags, spells, talents and quests rebuilt at every such login. AddPlayerBot now
+    // refuses these characters to a master, and the rebuild is removed as well so no path can bring it back.
 
     // bots join World chat if not solo oriented
     if (bot->GetLevel() >= 10 && sRandomPlayerbotMgr.IsRandomBot(bot) && GET_PLAYERBOT_AI(bot) &&
@@ -1186,6 +1184,11 @@ std::vector<std::string> PlayerbotHolder::HandlePlayerbotCommand(char const* arg
 
     if (!strcmp(cmd, "addclass"))
     {
+        // local: no addclass (custom-wow). Refused for everyone, GMs included: AddClassCommand = 0 still lets a GM
+        // through. Everyone in this world has a life of their own; nobody is conjured into a party by class.
+        messages.push_back("addclass is closed on this realm.");
+        return messages;
+
         if (sPlayerbotAIConfig.addClassCommand == 0 && !master->CanBeGameMaster())
         {
             messages.push_back("You do not have permission to create bot by addclass command");
