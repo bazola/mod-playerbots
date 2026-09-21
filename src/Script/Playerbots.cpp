@@ -130,8 +130,59 @@ public:
         PLAYERHOOK_CAN_PLAYER_USE_GUILD_CHAT,
         PLAYERHOOK_CAN_PLAYER_USE_CHANNEL_CHAT,
         PLAYERHOOK_ON_GIVE_EXP,
-        PLAYERHOOK_ON_BEFORE_TELEPORT
+        PLAYERHOOK_ON_BEFORE_TELEPORT,
+        PLAYERHOOK_CAN_GROUP_INVITE
     }) {}
+
+    // Local patch (custom-wow, plans/31 §17). A person asking a bot to come along must always win.
+    //
+    // The core refuses an invite to anyone already in a group (GroupHandler.cpp, ERR_ALREADY_IN_GROUP_S),
+    // and that refusal is several checks further down than this hook -- so this is the one place where a
+    // bot's own company can be stood down before the invite is judged. Without it, switching bot grouping
+    // on would make a share of the realm unrecruitable, which is the opposite of what it is for.
+    //
+    // Only bot-led companies are broken up: a party holding a person belongs to that person, and nobody
+    // gets their group taken from them by someone else's invite. The bot leaves of its own accord rather
+    // than being removed, so nothing reads as a kick -- regard.py charges kicked_by (-10) only when
+    // group_leave carries a kicker, and leaving a party costs a bot nothing with its companions.
+    [[nodiscard]] bool OnPlayerCanGroupInvite(Player* player, std::string& membername) override
+    {
+        if (!player)
+            return true;
+
+        Player* invited = ObjectAccessor::FindPlayerByName(membername, false);
+        if (!invited || invited == player)
+            return true;
+
+        PlayerbotAI* invitedAI = GET_PLAYERBOT_AI(invited);
+        if (!invitedAI || !invitedAI->IsBotAI() || IsSelfBot(invited))
+            return true;            // a person, or someone at a keyboard: leave them alone
+
+        if (GET_PLAYERBOT_AI(player) && !IsSelfBot(player))
+            return true;            // bots inviting bots do not get to break up other companies
+
+        Group* group = invited->GetGroup();
+        if (!group || group->isBGGroup() || group->isLFGGroup())
+            return true;
+
+        // Someone real in there already? Then it is their company, not ours to dissolve.
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (!member)
+                continue;
+            PlayerbotAI* memberAI = GET_PLAYERBOT_AI(member);
+            if (!memberAI || IsSelfBot(member))
+                return true;
+        }
+
+        invitedAI->LeaveOrDisbandGroup();
+
+        LOG_DEBUG("playerbots", "[Playerbots] {} stood down from its company so {} could invite it",
+                  invited->GetName(), player->GetName());
+
+        return true;
+    }
 
     void OnPlayerLogin(Player* player) override
     {
