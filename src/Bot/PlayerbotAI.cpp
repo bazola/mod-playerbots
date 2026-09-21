@@ -447,7 +447,9 @@ void PlayerbotAI::UpdateAIGroupMaster()
     if (master)
         masterBotAI = GET_PLAYERBOT_AI(master);
 
-    if (!master || (masterBotAI && !IsSelfBot(master)))
+    // Local patch (custom-wow, plans/31 §15 H1): re-searching for a bot whose master is already its own
+    // group leader can only return that same leader, so it is pure waste on every tick.
+    if (!master || (masterBotAI && !IsSelfBot(master) && master != GetGroupLeader()))
     {
         Player* newMaster = FindNewMaster();
         if (newMaster)
@@ -4452,6 +4454,9 @@ Player* PlayerbotAI::FindNewMaster()
     if (!leaderBotAI || IsSelfBot(groupLeader))
         return groupLeader;
 
+    // Local patch (custom-wow, plans/31 §15 H1). Remember the leader, in case no person is found below.
+    Player* const botLeader = groupLeader;
+
     // Find the real player in group
     for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
     {
@@ -4479,6 +4484,17 @@ Player* PlayerbotAI::FindNewMaster()
             return member;
         }
     }
+
+    // Local patch (custom-wow, plans/31 §15 H1). A company with nobody real in it still needs someone to
+    // follow. Upstream returns nullptr here, which leaves every member of a bot-only group master-less --
+    // and because UpdateAI re-enters this search for any bot whose master is a bot, it ran on every tick
+    // and found nothing every time. The group then held together only because the master set by
+    // AcceptInvitationAction happened to survive the `if (newMaster)` guard: it worked by accident.
+    // The leader is the right answer outside a battleground, where the rule above (real players only)
+    // exists for objective play and still stands.
+    if (!bot->InBattleground() && botLeader && botLeader != bot)
+        return botLeader;
+
     return nullptr;
 }
 

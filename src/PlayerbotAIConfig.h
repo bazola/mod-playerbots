@@ -426,6 +426,7 @@ public:
     bool autoLearnQuestSpells;
     bool autoTeleportForLevel;
     bool randomBotGroupNearby;
+    uint32 yieldGroupToPlayerChance;   // plans/31 §15 H3: leave a bot-only company when a person walks up
     int32 enableRandomBotTrading;
     uint32 tweakValue;  // Debugging config
 

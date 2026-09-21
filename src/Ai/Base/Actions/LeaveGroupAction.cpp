@@ -8,6 +8,7 @@
 #include "Event.h"
 #include "PlayerbotAIConfig.h"
 #include "PlayerbotTextMgr.h"
+#include "ServerFacade.h"
 #include "Playerbots.h"
 
 bool LeaveGroupAction::Execute(Event event)
@@ -129,6 +130,33 @@ bool LeaveFarAwayAction::isUseful()
     if (botAI->IsAltBot() &&
         (!groupLeaderBotAI || IsSelfBot(groupLeader)))  // Don't leave when an altbot is grouped under a regular real player or a selfbot.
         return false;
+
+    // Local patch (custom-wow, plans/31 §15 H3). A person who walks up wanting hands cannot recruit anyone
+    // already in a company: the core refuses the invite with ERR_ALREADY_IN_GROUP_S (GroupHandler.cpp:164)
+    // before any bot code runs, so nothing here can react to being asked. The only way a bot can be
+    // available is to be free before the asking. Everything above has established this is a bot-led company
+    // with no person in it, so breaking it costs nobody anything -- and company dispersing when someone
+    // comes looking for help is what people do.
+    //
+    // Chance-gated and off by default: with grouping on, an unbounded rule would dissolve every company
+    // within sight of the player and make the world empty around him, which is the opposite of the point.
+    if (sPlayerbotAIConfig.yieldGroupToPlayerChance && urand(0, 99) < sPlayerbotAIConfig.yieldGroupToPlayerChance)
+    {
+        GuidVector nearby = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest friendly players")->Get();
+        for (ObjectGuid const& guid : nearby)
+        {
+            Player* person = ObjectAccessor::FindPlayer(guid);
+            if (!person || person == bot || GET_PLAYERBOT_AI(person))
+                continue;                       // only someone at a keyboard
+            if (person->GetGroup() || person->IsBeingTeleported() || person->isDND())
+                continue;                       // already has company, or not asking for any
+            if (person->GetMapId() != bot->GetMapId())
+                continue;
+            if (ServerFacade::instance().GetDistance2d(bot, person) > sPlayerbotAIConfig.rpgDistance)
+                continue;                       // walked up to, not merely in the same field
+            return true;
+        }
+    }
 
     if (botAI->GetGrouperType() == GrouperType::SOLO)
         return true;
