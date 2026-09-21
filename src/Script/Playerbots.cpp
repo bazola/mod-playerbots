@@ -100,6 +100,23 @@ public:
 
     void OnDatabaseWarnAboutSyncQueries(bool apply) override { PlayerbotsDatabase.WarnAboutSyncQueries(apply); }
 
+    // local: per-character logout (plan 34 section 4.1).
+    //
+    // Upstream dropped this override in #2793. Without it the core default applies --
+    // CHAR_UPD_ACCOUNT_ONLINE, "UPDATE characters SET online = 0 WHERE account = ?" keyed on the
+    // account id (WorldSession::LogoutPlayer). Our 158 bot accounts hold ~10 characters each, so one
+    // bot logging out would mark every character on its account offline while they are still in the
+    // world, and the flag is only set again at login. regard.py joins on online = 1 to decide who is
+    // about, and add-bots.sh and lore-fill.sh count with it.
+    //
+    // CHAR_UPD_CHAR_OFFLINE is the same statement with "WHERE guid = ?", so only the character that
+    // actually logged out is marked.
+    void OnDatabaseSelectIndexLogout(Player* player, uint32& statementIndex, uint32& statementParam) override
+    {
+        statementIndex = CHAR_UPD_CHAR_OFFLINE;
+        statementParam = player->GetGUID().GetCounter();
+    }
+
     void OnDatabaseGetDBRevision(std::map<std::string, std::string>& revisions) override
     {
         std::string revision;
