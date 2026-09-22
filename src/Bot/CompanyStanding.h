@@ -2,7 +2,7 @@
  * local: company standing (custom wow plans/14, step C, the behaviour tier).
  *
  * Guild seats, contested holdings and stances between guilds are kept outside the worldserver by
- * /opt/wow/regard/regard.py and rivalry.py in acore_characters (guild_seat, guild_holding,
+ * the regard service (regard.py and rivalry.py) in acore_characters (guild_seat, guild_holding,
  * guild_relation). This cache reloads them on a background thread and swaps a snapshot in whole, so
  * the checks below cost a mutex and a hash lookup. Every behaviour has a chance in
  * AiPlayerbot.Company*; all default to 0, which leaves stock behaviour untouched.
