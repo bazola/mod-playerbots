@@ -544,6 +544,19 @@ AiPlayerbot.FleeingEnabled = 1
 # Default: 1 (enabled)
 AiPlayerbot.MaintenanceCommand = 1
 
+# Local patch (custom-wow, plans/25 item 65)
+# Bots sell their grey items when a real player they are grouped with opens a merchant window.
+#
+# Only bots that can interact with the SAME vendor sell. Selling is keyed on a bot's own
+# surroundings rather than on the window that was opened, so a bot standing elsewhere would
+# silently sell nothing however this is set -- it is limited to the same counter so that the
+# behaviour is predictable instead of depending on where everyone happened to stand.
+#
+# Greys only (ITEM_QUALITY_POOR; equipment and profession tools are excluded), vendor-sold and so
+# reversible through the vendor's buyback. Re-firing is throttled per bot.
+# Default: 0 (disabled, stock behaviour)
+AiPlayerbot.SellGrayOnVendorOpen = 0
+
 # Enable/Disable specific maintenance command functionality for altbots
 # Disable to prevent players from giving free bags, spells, skill levels, etc. to their altbots
 # Default: 1 (enabled)

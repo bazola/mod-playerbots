@@ -148,8 +148,69 @@ public:
         PLAYERHOOK_CAN_PLAYER_USE_CHANNEL_CHAT,
         PLAYERHOOK_ON_GIVE_EXP,
         PLAYERHOOK_ON_BEFORE_TELEPORT,
-        PLAYERHOOK_CAN_GROUP_INVITE
+        PLAYERHOOK_CAN_GROUP_INVITE,
+        PLAYERHOOK_ON_SEND_LIST_INVENTORY
     }) {}
+
+    // Local patch (custom-wow, plans/25 item 65). Bots sell their greys when the person they are
+    // travelling with opens a merchant window.
+    //
+    // Narrow deliberately, and the narrowness is the point. Selling in this module is keyed on the
+    // BOT's own surroundings: SellAction::Sell resolves a vendor out of the bot's "nearest npcs"
+    // value and sells through the bot's own session, never once reading the vendorGuid handed in
+    // here (SellAction.cpp:150-184). So "the party sells when you open a window" cannot be honoured
+    // as it was written down -- a bot across the zone would silently sell nothing, and the feature
+    // would work or not work depending on where everyone happened to be standing. This fires only
+    // for bots that can reach the SAME counter, which is the version that does what it looks like.
+    //
+    // Greys only, and the literal is hard-coded on purpose: "gray" resolves to ITEM_QUALITY_POOR
+    // with allClasses false (SellAction.cpp:94-99), which keeps equipment and profession tools out
+    // of it. Never route a caller-supplied quality string through here.
+    void OnPlayerSendListInventory(Player* player, ObjectGuid vendorGuid, uint32& /*vendorEntry*/) override
+    {
+        if (!sPlayerbotAIConfig.sellGrayOnVendorOpen)
+            return;
+
+        // A person at a keyboard opening their own window. Nothing in the module sends
+        // CMSG_LIST_INVENTORY on a bot's behalf today, but that is a fact about callers rather than
+        // a guarantee, so it is checked rather than assumed.
+        if (!player || GET_PLAYERBOT_AI(player))
+            return;
+
+        Group* group = player->GetGroup();
+        if (!group)
+            return;
+
+        // This hook fires on EVERY CMSG_LIST_INVENTORY -- every reopen, and every client re-sync of
+        // an open window -- and SellAction keeps no cooldown of its own, so without this a player
+        // reopening a vendor would re-run the sweep each time. Keyed per bot; bounded by the number
+        // of bots that have ever sold, and only ever touched from the world thread.
+        static std::unordered_map<ObjectGuid, time_t> lastSweep;
+        time_t const now = time(nullptr);
+
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (!member || member == player)
+                continue;
+
+            PlayerbotAI* botAI = GET_PLAYERBOT_AI(member);
+            if (!botAI || !botAI->IsBotAI() || IsSelfBot(member))
+                continue;               // a person, or someone at a keyboard: leave them alone
+
+            // The same counter, not merely some vendor somewhere. This is the whole difference
+            // between this and firing the existing `s gray` at the entire party.
+            if (!member->GetNPCIfCanInteractWith(vendorGuid, UNIT_NPC_FLAG_VENDOR))
+                continue;
+
+            time_t& last = lastSweep[member->GetGUID()];
+            if (last && now - last < 10)
+                continue;
+            last = now;
+
+            botAI->DoSpecificAction("sell", Event("sell", "gray"), true);
+        }
+    }
 
     // Local patch (custom-wow, plans/31 §17). A person asking a bot to come along must always win.
     //

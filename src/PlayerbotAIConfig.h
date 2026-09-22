@@ -456,6 +456,10 @@ public:
     int32 addClassCommand;
     int32 addClassAccountPoolSize;
     int32 maintenanceCommand;
+    // Local patch (custom-wow, plans/25 item 65): bots at the same vendor as a grouped player sell
+    // their greys when that player opens the merchant window. Off by default, leaving stock
+    // behaviour untouched.
+    bool sellGrayOnVendorOpen;
     bool altMaintenanceAttunementQs,
             altMaintenanceBags,
             altMaintenanceAmmo,
