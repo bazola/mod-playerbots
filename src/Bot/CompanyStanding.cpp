@@ -219,7 +219,9 @@ void CompanyStanding::Load()
         if (sPlayerbotAIConfig.companyDefectChance)
         {
             if (QueryResult result = CharacterDatabase.Query(
-                    "SELECT r.bot_guid, AVG(r.score) FROM regard r JOIN guild_member mb ON mb.guid = r.bot_guid "
+                    // Aliased on purpose: the core's Field reader re-calls GetData<double>() forever on a
+                    // column named "AVG(...)" that is not DECIMAL, hanging this thread at every start.
+                    "SELECT r.bot_guid, AVG(r.score) AS att FROM regard r JOIN guild_member mb ON mb.guid = r.bot_guid "
                     "JOIN guild_member mo ON mo.guid = r.other_guid AND mo.guildid = mb.guildid GROUP BY r.bot_guid"))
             {
                 do
