@@ -893,6 +893,18 @@ AiPlayerbot.BotSendMailEnabled = 1
 # If disabled, every randombot starts on a specified level (but can still level up by killing mobs and questing)
 AiPlayerbot.DisableRandomLevels = 0
 
+# Preserve random bots' progression after their first factory initialization.
+# Stops scheduled factory randomization and skips the destructive factory refresh during
+# random-bot recovery/teleportation (inventory, quests, reputation and talents).
+# Overrides LevelBrackets.Enabled and ResetBotLevel.Enabled while on, including after
+# ".reload config". Their configured values take effect again when this switch is turned off.
+# Initialization is recorded permanently; existing factory-level records are migrated on use.
+# First-time factory initialization and explicit GM init/level/random commands still work.
+# Normal XP, bot learning/gear actions, recovery and population login/logout remain active;
+# this is not a guarantee that a particular bot stays online or never teleports.
+# Reload with ".reload config". Default: 0 (existing behavior).
+AiPlayerbot.PersistentProgression = 0
+
 # Set randombots' starting level here if "AiPlayerbot.DisableRandomLevels" is enabled
 AiPlayerbot.RandombotStartingLevel = 1
 
