@@ -1526,7 +1526,8 @@ bool RandomPlayerbotMgr::ProcessBot(Player* bot)
     {
         // randomize
         uint32 randomize = GetEventValue(botId, "randomize");
-        if (!randomize)
+        // Provision a persistent bot once; timed level events are not durable markers.
+        if (!randomize && (!sPlayerbotAIConfig.persistentProgression || !HasFactoryInitialization(bot)))
         {
             // bool randomiser = true;
             // if (player->GetGuildId())
@@ -1990,6 +1991,7 @@ void RandomPlayerbotMgr::Randomize(Player* bot)
         uint8 level = bot->GetLevel();
         PlayerbotFactory factory(bot, level);
         factory.Randomize(true);
+        MarkFactoryInitialized(bot);
         // IncreaseLevel(bot);
     }
     else
@@ -2086,6 +2088,7 @@ void RandomPlayerbotMgr::RandomizeFirst(Player* bot)
     SetValue(bot, "level", level);
     PlayerbotFactory factory(bot, level);
     factory.Randomize(false);
+    MarkFactoryInitialized(bot);
 
     uint32 randomTime =
         urand(sPlayerbotAIConfig.minRandomBotRandomizeTime, sPlayerbotAIConfig.maxRandomBotRandomizeTime);
@@ -2127,6 +2130,7 @@ void RandomPlayerbotMgr::RandomizeMin(Player* bot)
     SetValue(bot, "level", level);
     PlayerbotFactory factory(bot, level);
     factory.Randomize(false);
+    MarkFactoryInitialized(bot);
 
     uint32 randomTime =
         urand(sPlayerbotAIConfig.minRandomBotRandomizeTime, sPlayerbotAIConfig.maxRandomBotRandomizeTime);
@@ -2218,8 +2222,12 @@ void RandomPlayerbotMgr::Refresh(Player* bot)
     bot->DurabilityRepairAll(false, 1.0f, false);
     bot->SetFullHealth();
     bot->SetPvP(sWorld->IsPvPRealm());
-    PlayerbotFactory factory(bot, bot->GetLevel());
-    factory.Refresh();
+    // Keep revival, repair and AI recovery, but do not replace a persistent bot's belongings.
+    if (!sPlayerbotAIConfig.persistentProgression)
+    {
+        PlayerbotFactory factory(bot, bot->GetLevel());
+        factory.Refresh();
+    }
 
     if (bot->GetMaxPower(POWER_MANA) > 0)
         bot->SetPower(POWER_MANA, bot->GetMaxPower(POWER_MANA));
@@ -2354,7 +2362,29 @@ std::vector<uint32> RandomPlayerbotMgr::GetBgBots(uint32 bracket)
     return BgBots;
 }
 
-CachedEvent* RandomPlayerbotMgr::FindEvent(uint32 bot, std::string const& event)
+bool RandomPlayerbotMgr::HasFactoryInitialization(Player* bot)
+{
+    uint32 botId = bot->GetGUID().GetCounter();
+    if (GetEventValue(botId, "factory_initialized"))
+        return true;
+
+    // Older realms recorded only a timed factory level. Read that historical
+    // evidence without expiring it, then migrate once to a permanent marker.
+    if (CachedEvent* level = FindEvent(botId, "level", true); level && level->value)
+    {
+        MarkFactoryInitialized(bot);
+        return true;
+    }
+    return false;
+}
+
+void RandomPlayerbotMgr::MarkFactoryInitialized(Player* bot)
+{
+    if (sPlayerbotAIConfig.persistentProgression)
+        SetEventValue(bot->GetGUID().GetCounter(), "factory_initialized", 1, 0);
+}
+
+CachedEvent* RandomPlayerbotMgr::FindEvent(uint32 bot, std::string const& event, bool allowExpired)
 {
     BotEventCache& cache = eventCache[bot];
 
@@ -2394,7 +2424,8 @@ CachedEvent* RandomPlayerbotMgr::FindEvent(uint32 bot, std::string const& event)
     CachedEvent& e = it->second;
 
     // remove expired events
-    if (e.validIn && (NowSeconds() - e.lastChangeTime) >= e.validIn && event != "specNo" && event != "specLink")
+    if (!allowExpired && e.validIn && (NowSeconds() - e.lastChangeTime) >= e.validIn && event != "specNo" &&
+        event != "specLink")
     {
         cache.events.erase(it);
         return nullptr;

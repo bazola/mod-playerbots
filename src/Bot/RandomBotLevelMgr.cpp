@@ -123,6 +123,9 @@ std::vector<LevelBracketConfig>& RandomBotLevelMgr::GetFactionRanges(TeamId team
 // working copies at runtime, so PlayerbotAIConfig's own vectors are never touched after this point.
 void RandomBotLevelMgr::LoadConfig()
 {
+    if (sPlayerbotAIConfig.persistentProgression)
+        _pendingLevelResets.clear();
+
     _allianceRanges = sPlayerbotAIConfig.levelBracketsAlliance;
     _hordeRanges = sPlayerbotAIConfig.levelBracketsHorde;
     _numRanges = sPlayerbotAIConfig.levelBracketsNumRanges;

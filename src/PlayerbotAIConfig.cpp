@@ -832,6 +832,8 @@ bool PlayerbotAIConfig::Initialize()
 // percentages at runtime.
 void PlayerbotAIConfig::LoadRandomBotLevelConfig()
 {
+    persistentProgression = sConfigMgr->GetOption<bool>("AiPlayerbot.PersistentProgression", false);
+
     // ---- Level brackets ----
     levelBracketsEnabled = sConfigMgr->GetOption<bool>("AiPlayerbot.LevelBrackets.Enabled", false);
     levelBracketsIgnoreGuildWithRealPlayers =
@@ -972,6 +974,13 @@ void PlayerbotAIConfig::LoadRandomBotLevelConfig()
 
     ParseLevelMgrExcludeNames(sConfigMgr->GetOption<std::string>("AiPlayerbot.ResetBotLevel.ExcludeNames", ""),
         resetBotLevelExcludeNames);
+
+    // One switch wins over both automatic level-management sub-features, including reloads.
+    if (persistentProgression)
+    {
+        levelBracketsEnabled = false;
+        resetBotLevelEnabled = false;
+    }
 }
 
 bool PlayerbotAIConfig::IsInRandomAccountList(uint32 id)

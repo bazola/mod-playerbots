@@ -352,6 +352,7 @@ public:
     ShowHideCosmetic randomBotShowCloak;
     bool randomBotFixedLevel;
     bool disableRandomLevels;
+    bool persistentProgression = false;
     float randomBotXPRate;
     uint32 randomBotAllianceRatio;
     uint32 randomBotHordeRatio;

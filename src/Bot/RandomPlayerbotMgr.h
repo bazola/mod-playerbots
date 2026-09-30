@@ -222,7 +222,9 @@ private:
     bool _isBotInitializing = true;
     bool _isBotLogging = true;
     NewRpgStatistic rpgStasticTotal;
-    CachedEvent* FindEvent(uint32 bot, std::string const& event);
+    bool HasFactoryInitialization(Player* bot);
+    void MarkFactoryInitialized(Player* bot);
+    CachedEvent* FindEvent(uint32 bot, std::string const& event, bool allowExpired = false);
     uint32 GetEventValue(uint32 bot, std::string const& event);
     std::string GetEventData(uint32 bot, std::string const& event);
     uint32 SetEventValue(uint32 bot, std::string const& event, uint32 value, uint32 validIn,
