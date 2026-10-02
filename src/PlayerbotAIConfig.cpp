@@ -840,6 +840,8 @@ void PlayerbotAIConfig::LoadRandomBotLevelConfig()
         persistentMode = 0;
     }
     persistentProgression = static_cast<PersistentProgressionMode>(persistentMode);
+    persistentProgressionAnchorOnMeeting =
+        sConfigMgr->GetOption<bool>("AiPlayerbot.PersistentProgression.AnchorOnMeeting", false);
     persistentProgressionFollowGap =
         sConfigMgr->GetOption<uint32>("AiPlayerbot.PersistentProgression.FollowGap", 0);
     persistentProgressionAnchorInterval =

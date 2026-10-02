@@ -91,6 +91,9 @@ private:
 class RandomPlayerbotMgr : public PlayerbotHolder
 {
 public:
+    // World-thread only: seal a met bot's current state even before first factory provisioning.
+    void PreserveCurrentState(uint32 botId);
+
     static RandomPlayerbotMgr& instance()
     {
         static RandomPlayerbotMgr instance;

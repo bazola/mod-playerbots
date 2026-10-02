@@ -363,6 +363,7 @@ public:
     PersistentProgressionMode persistentProgression = PersistentProgressionMode::OFF;
     uint32 persistentProgressionFollowGap = 0;
     uint32 persistentProgressionAnchorInterval = 300;
+    bool persistentProgressionAnchorOnMeeting = false;
     float randomBotXPRate;
     uint32 randomBotAllianceRatio;
     uint32 randomBotHordeRatio;

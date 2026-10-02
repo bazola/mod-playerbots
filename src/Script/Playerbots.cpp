@@ -23,6 +23,7 @@
 #include "PlayerbotSpellRepository.h"
 #include "PlayerbotWorldThreadProcessor.h"
 #include "RandomPlayerbotMgr.h"
+#include "RandomBotLevelMgr.h"
 #include "ScriptMgr.h"
 #include "cmath"
 
@@ -609,6 +610,9 @@ public:
         if (player == nullptr)
             return;
 
+        if (packet && sPlayerbotAIConfig.persistentProgressionAnchorOnMeeting)
+            RandomBotLevelMgr::instance().ObserveMeetingTradePacket(player, *packet);
+
         PlayerbotAI* botAI = PlayerbotsMgr::instance().GetPlayerbotAI(player);
 
         if (botAI != nullptr)
@@ -696,6 +700,7 @@ public:
 
 void AddPlayerbotsSecureLoginScripts();
 void AddPlayerbotsSelfBotAfkScripts();
+void AddPlayerbotEncounterScripts();
 
 void AddSC_MagtheridonBotScripts();
 void AddSC_TempestKeepBotScripts();
@@ -716,6 +721,7 @@ void AddPlayerbotsScripts()
     new PlayerBotsBGScript();
     AddPlayerbotsSecureLoginScripts();
     AddPlayerbotsSelfBotAfkScripts();
+    AddPlayerbotEncounterScripts();
     AddPlayerbotsCommandscripts();
     PlayerBotsGuildValidationScript();
     AddSC_MagtheridonBotScripts();
