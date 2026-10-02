@@ -754,10 +754,7 @@ std::string const PlayerbotHolder::ProcessBotCommand(std::string const cmd, Obje
         if (bot->GetLevel() >= target)
             return "ERROR: That character is already at your level.";
 
-        bot->GiveLevel(target);
-        bot->SetUInt32Value(PLAYER_XP, 0);
-        bot->InitTalentForLevel();
-        bot->InitStatsForLevel(true);
+        PlayerbotFactory::RaiseLevel(bot, static_cast<uint8>(target));
 
         // local: alt catch-up -- the class abilities that only a quest can give (custom-wow plan 27 §6).
         // Measured against the world DB: 269 Classic quests reward a spell, 91 are restricted to one class, 75

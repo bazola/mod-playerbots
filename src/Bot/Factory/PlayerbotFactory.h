@@ -61,8 +61,8 @@ public:
 
     static ObjectGuid GetRandomBot();
     static void Init();
-    void Refresh();
-    void RefreshKeepingInventory();
+    void Refresh(bool keepInventory = false);
+    static void RaiseLevel(Player* bot, uint8 level);
     void Randomize(bool incremental);
     static std::list<uint32> classQuestIds;
     void ClearEverything();

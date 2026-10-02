@@ -2237,10 +2237,7 @@ void RandomPlayerbotMgr::Refresh(Player* bot)
     bot->SetPvP(sWorld->IsPvPRealm());
     // A kept bot is restocked but keeps its belongings.
     PlayerbotFactory factory(bot, bot->GetLevel());
-    if (RandomBotLevelMgr::instance().IsProgressionKept(bot))
-        factory.RefreshKeepingInventory();
-    else
-        factory.Refresh();
+    factory.Refresh(RandomBotLevelMgr::instance().IsProgressionKept(bot));
 
     if (bot->GetMaxPower(POWER_MANA) > 0)
         bot->SetPower(POWER_MANA, bot->GetMaxPower(POWER_MANA));

@@ -1048,7 +1048,12 @@ void PlayerbotFactory::Randomize(bool incremental)
         pmo->finish();
 }
 
-void PlayerbotFactory::Refresh()
+// keepInventory is for a bot whose progression is kept (AiPlayerbot.PersistentProgression): the same restocks
+// without the ClearInventory() that otherwise opens a refresh, so what the bot earned stays in its bags, and its
+// talents topped up rather than reset. Each restock tops up rather than replaces, except InitFood(), which adds
+// two fresh stacks per call; with the bags kept it only runs when they hold neither food nor drink, or a bot
+// refreshed every few hours would fill up with it.
+void PlayerbotFactory::Refresh(bool keepInventory)
 {
     // Prepare();
     // if (!sPlayerbotAIConfig.equipAndSpecPersistence ||
@@ -1057,50 +1062,19 @@ void PlayerbotFactory::Refresh()
     //     InitEquipment(true);
     // }
     InitAttunementQuests();
-    ClearInventory();
+    if (!keepInventory)
+        ClearInventory();
     InitAmmo();
-    InitFood();
-    InitReagents();
-    InitConsumables();
-    InitPotions();
-    InitPet();
-    InitPetTalents();
-    InitSkills();
-    InitClassSpells();
-    InitAvailableSpells();
-    InitReputation();
-    InitSpecialSpells();
-    InitMounts();
-    InitKeyring();
-    if (!sPlayerbotAIConfig.equipAndSpecPersistence ||
-        bot->GetLevel() < sPlayerbotAIConfig.equipAndSpecPersistenceLevel)
+    bool needFood = true;
+    if (keepInventory)
     {
-        InitTalentsTree(true, true, true);
+        FindFoodVisitor food(bot, 11);
+        FindFoodVisitor drink(bot, 59);
+        IterateItems(&food);
+        IterateItems(&drink);
+        needFood = food.GetResult().empty() && drink.GetResult().empty();
     }
-    if (bot->GetLevel() >= sPlayerbotAIConfig.minEnchantingBotLevel)
-        ApplyEnchantAndGemsNew();
-    bot->DurabilityRepairAll(false, 1.0f, false);
-    if (bot->isDead())
-        bot->ResurrectPlayer(1.0f, false);
-    uint32 money = urand(level * 1000, level * 5 * 1000);
-    if (bot->GetMoney() < money)
-        bot->SetMoney(money);
-    // bot->SaveToDB(false, false);
-}
-
-// Refresh() for a bot whose progression is kept (AiPlayerbot.PersistentProgression): the same restocks,
-// without the ClearInventory() that opens Refresh(), so what the bot earned stays in its bags. Each step
-// tops up rather than replaces, except InitFood(), which adds two fresh stacks per call; it only runs
-// when the bags hold neither food nor drink, or a bot refreshed every few hours would fill up with it.
-void PlayerbotFactory::RefreshKeepingInventory()
-{
-    InitAttunementQuests();
-    InitAmmo();
-    FindFoodVisitor food(bot, 11);
-    FindFoodVisitor drink(bot, 59);
-    IterateItems(&food);
-    IterateItems(&drink);
-    if (food.GetResult().empty() && drink.GetResult().empty())
+    if (needFood)
         InitFood();
     InitReagents();
     InitConsumables();
@@ -1117,7 +1091,7 @@ void PlayerbotFactory::RefreshKeepingInventory()
     if (!sPlayerbotAIConfig.equipAndSpecPersistence ||
         bot->GetLevel() < sPlayerbotAIConfig.equipAndSpecPersistenceLevel)
     {
-        InitTalentsTree(true);
+        InitTalentsTree(true, true, !keepInventory);
     }
     if (bot->GetLevel() >= sPlayerbotAIConfig.minEnchantingBotLevel)
         ApplyEnchantAndGemsNew();
@@ -1127,6 +1101,21 @@ void PlayerbotFactory::RefreshKeepingInventory()
     uint32 money = urand(level * 1000, level * 5 * 1000);
     if (bot->GetMoney() < money)
         bot->SetMoney(money);
+    // bot->SaveToDB(false, false);
+}
+
+// Raises a character's level in place: the level, its talent points and its stats, and nothing else -- no
+// factory reroll, which would clear the bags (it calls ClearInventory() at any setting). Raise only; what
+// follows (spells, gear) is up to the caller. Shared by the alt catch-up and the anchored level-follow.
+void PlayerbotFactory::RaiseLevel(Player* bot, uint8 level)
+{
+    if (level <= bot->GetLevel())
+        return;
+
+    bot->GiveLevel(level);
+    bot->SetUInt32Value(PLAYER_XP, 0);
+    bot->InitTalentForLevel();
+    bot->InitStatsForLevel(true);
 }
 
 void PlayerbotFactory::InitConsumables()

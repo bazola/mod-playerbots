@@ -1263,10 +1263,7 @@ void RandomBotLevelMgr::RaiseToAnchor(Player* bot, uint8 targetLevel, uint8 anch
     if (bot->IsMounted())
         bot->Dismount();
 
-    bot->GiveLevel(targetLevel);
-    bot->SetUInt32Value(PLAYER_XP, 0);
-    bot->InitTalentForLevel();
-    bot->InitStatsForLevel(true);
+    PlayerbotFactory::RaiseLevel(bot, targetLevel);
 
     PlayerbotFactory factory(bot, targetLevel);
     factory.InitSkills();
@@ -1278,7 +1275,7 @@ void RandomBotLevelMgr::RaiseToAnchor(Player* bot, uint8 targetLevel, uint8 anch
     factory.InitPetTalents();
     PlayerbotFactory::AutoGear(bot, sPlayerbotAIConfig.autoGearQualityLimit, sPlayerbotAIConfig.autoGearScoreLimit,
         true);
-    factory.RefreshKeepingInventory();
+    factory.Refresh(true);
 
     bot->SaveToDB(false, false);
 
