@@ -14,6 +14,7 @@
 #include "ObjectGuid.h"
 #include "PlayerbotAIConfig.h"
 #include "SharedDefines.h"
+#include <unordered_map>
 #include <vector>
 
 class Player;
@@ -37,6 +38,10 @@ public:
     void OnBotLogin(Player* player);
     void OnBotLevelChanged(Player* player, uint8 oldLevel);
     void OnPlayerLogout(Player* player);
+
+    // AiPlayerbot.PersistentProgression: true when this random bot's progression is kept -- every random
+    // bot in ALL mode, only the bots listed in playerbots_bot_anchor in ANCHORED mode.
+    bool IsProgressionKept(Player* bot) const;
 
 private:
     RandomBotLevelMgr() = default;
@@ -78,6 +83,11 @@ private:
     void SkipBotLevel(Player* player, uint8 currentLevel);
     void RunResetPlayedTimeCheck();
 
+    // ---- Persistent progression, anchored mode ----
+    void LoadAnchors();
+    void RunAnchorFollow();
+    void RaiseToAnchor(Player* bot, uint8 targetLevel, uint8 anchorLevel);
+
     // Level brackets: working copies, since dynamic distribution and the clamp/rebalance pass
     // mutate percentages at runtime and must never write back into PlayerbotAIConfig.
     std::vector<LevelBracketConfig> _allianceRanges;
@@ -91,6 +101,10 @@ private:
     uint32 _bracketsTimer = 0; // Level brackets: distribution adjustments
     uint32 _flaggedTimer = 0;  // Level brackets: pending reset checks
     uint32 _resetTimer = 0;    // Level reset: played-time based reset checks
+    uint32 _anchorTimer = 0;   // Persistent progression: anchor reload + level follow
+
+    // Anchored bot low guid -> the low guid of the character it is anchored to.
+    std::unordered_map<uint32, uint32> _anchors;
 };
 
 // Registers the random bot level brackets + level reset world/player scripts.

@@ -10,6 +10,7 @@
 
 #include "RandomBotLevelMgr.h"
 #include "ArenaTeamMgr.h"
+#include "CharacterCache.h"
 #include "DatabaseEnv.h"
 #include "LFGMgr.h"
 #include "Log.h"
@@ -17,6 +18,7 @@
 #include "Player.h"
 #include "PlayerbotFactory.h"
 #include "Playerbots.h"
+#include "PlayerbotsDatabase.h"
 #include "QueryResult.h"
 #include "Random.h"
 #include "RandomPlayerbotMgr.h"
@@ -123,8 +125,14 @@ std::vector<LevelBracketConfig>& RandomBotLevelMgr::GetFactionRanges(TeamId team
 // working copies at runtime, so PlayerbotAIConfig's own vectors are never touched after this point.
 void RandomBotLevelMgr::LoadConfig()
 {
-    if (sPlayerbotAIConfig.persistentProgression)
+    if (sPlayerbotAIConfig.persistentProgression == PersistentProgressionMode::ALL)
         _pendingLevelResets.clear();
+
+    if (sPlayerbotAIConfig.persistentProgression == PersistentProgressionMode::ANCHORED)
+        LoadAnchors();
+    else
+        _anchors.clear();
+    _anchorTimer = 0;
 
     _allianceRanges = sPlayerbotAIConfig.levelBracketsAlliance;
     _hordeRanges = sPlayerbotAIConfig.levelBracketsHorde;
@@ -394,6 +402,9 @@ int RandomBotLevelMgr::GetOrFlagPlayerBracket(Player* player)
     bool isRandomBot = sRandomPlayerbotMgr.IsRandomBot(player);
 
     if (isRandomBot && IsNameInExcludeList(player, sPlayerbotAIConfig.levelBracketsExcludeNames))
+        return -1;
+
+    if (isRandomBot && IsProgressionKept(player))
         return -1;
 
     PlayerbotAI* botAI = GET_PLAYERBOT_AI(player);
@@ -744,7 +755,7 @@ void RandomBotLevelMgr::ProcessPendingLevelResets()
             continue;
         }
 
-        if (IsNameInExcludeList(bot, sPlayerbotAIConfig.levelBracketsExcludeNames))
+        if (IsNameInExcludeList(bot, sPlayerbotAIConfig.levelBracketsExcludeNames) || IsProgressionKept(bot))
         {
             it = _pendingLevelResets.erase(it);
             continue;
@@ -888,7 +899,8 @@ void RandomBotLevelMgr::RunResetPlayedTimeCheck()
         if (!sRandomPlayerbotMgr.IsRandomBot(candidate))
             continue;
 
-        if (IsNameInExcludeList(candidate, sPlayerbotAIConfig.resetBotLevelExcludeNames))
+        if (IsNameInExcludeList(candidate, sPlayerbotAIConfig.resetBotLevelExcludeNames) ||
+            IsProgressionKept(candidate))
             continue;
 
         PlayerbotAI* botAI = GET_PLAYERBOT_AI(candidate);
@@ -949,6 +961,17 @@ void RandomBotLevelMgr::Update(uint32 diff)
         }
     }
 
+    if (sPlayerbotAIConfig.persistentProgression == PersistentProgressionMode::ANCHORED)
+    {
+        _anchorTimer += diff;
+        if (_anchorTimer >= sPlayerbotAIConfig.persistentProgressionAnchorInterval * 1000)
+        {
+            _anchorTimer = 0;
+            LoadAnchors();
+            RunAnchorFollow();
+        }
+    }
+
     if (sPlayerbotAIConfig.resetBotLevelEnabled && sPlayerbotAIConfig.resetBotLevelRestrictTimePlayed &&
         sPlayerbotAIConfig.resetBotLevelMaxLevel > 0)
     {
@@ -966,7 +989,7 @@ void RandomBotLevelMgr::OnBotLogin(Player* player)
     if (!sRandomPlayerbotMgr.IsRandomBot(player))
         return;
 
-    if (IsNameInExcludeList(player, sPlayerbotAIConfig.resetBotLevelExcludeNames))
+    if (IsNameInExcludeList(player, sPlayerbotAIConfig.resetBotLevelExcludeNames) || IsProgressionKept(player))
         return;
 
     PlayerbotAI* botAI = GET_PLAYERBOT_AI(player);
@@ -1023,7 +1046,7 @@ void RandomBotLevelMgr::OnBotLevelChanged(Player* player, uint8 oldLevel)
     if (player->GetLevel() != oldLevel + 1)
         return;
 
-    if (IsNameInExcludeList(player, sPlayerbotAIConfig.resetBotLevelExcludeNames))
+    if (IsNameInExcludeList(player, sPlayerbotAIConfig.resetBotLevelExcludeNames) || IsProgressionKept(player))
         return;
 
     PlayerbotAI* botAI = GET_PLAYERBOT_AI(player);
@@ -1092,6 +1115,141 @@ void RandomBotLevelMgr::OnPlayerLogout(Player* player)
         std::remove_if(_pendingLevelResets.begin(), _pendingLevelResets.end(),
             [guid](PendingResetEntry const& entry) { return entry.botGuid == guid; }),
         _pendingLevelResets.end());
+}
+
+// =============================================================================
+// PERSISTENT PROGRESSION, ANCHORED MODE
+// =============================================================================
+
+bool RandomBotLevelMgr::IsProgressionKept(Player* bot) const
+{
+    switch (sPlayerbotAIConfig.persistentProgression)
+    {
+        case PersistentProgressionMode::ALL:
+            return true;
+        case PersistentProgressionMode::ANCHORED:
+            return bot && _anchors.count(bot->GetGUID().GetCounter());
+        default:
+            return false;
+    }
+}
+
+// The module only reads playerbots_bot_anchor. Whatever fills it decides who counts as anchored -- for
+// instance, the bots a real player has come to know -- and can rewrite it at any time.
+void RandomBotLevelMgr::LoadAnchors()
+{
+    std::unordered_map<uint32, uint32> anchors;
+    if (QueryResult result = PlayerbotsDatabase.Query("SELECT bot, anchor FROM playerbots_bot_anchor"))
+    {
+        do
+        {
+            Field* fields = result->Fetch();
+            anchors[fields[0].Get<uint32>()] = fields[1].Get<uint32>();
+        } while (result->NextRow());
+    }
+
+    if (anchors.size() != _anchors.size())
+        LOG_INFO("playerbots", "[RandomBotLevelMgr] {} anchored bots keep their progression.", anchors.size());
+    _anchors.swap(anchors);
+}
+
+// Keeps an anchored bot within reach of its anchor's level. Raise only: a bot that has outgrown its anchor
+// stays ahead, since the only way down is a factory reroll, which is exactly what anchoring prevents.
+// A bot is raised to 1-3 levels below its anchor once it has fallen FollowGap or more behind, and never
+// where the anchor can see it, so nobody watches an old friend gain ten levels on the spot.
+void RandomBotLevelMgr::RunAnchorFollow()
+{
+    uint32 const gap = sPlayerbotAIConfig.persistentProgressionFollowGap;
+    if (!gap)
+        return;
+
+    uint32 maxLevel = std::min<uint32>(sPlayerbotAIConfig.randomBotMaxLevel,
+        sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL));
+
+    // A handful per pass: each raise teaches spells and searches gear, and the rest wait for the next pass.
+    uint32 constexpr maxRaisesPerPass = 5;
+    uint32 raised = 0;
+
+    for (auto const& [botLow, anchorLow] : _anchors)
+    {
+        if (raised >= maxRaisesPerPass)
+            break;
+
+        Player* bot = ObjectAccessor::FindPlayerByLowGUID(botLow);
+        if (!bot || !bot->IsInWorld() || !bot->GetSession() || bot->GetSession()->IsLoggingOut() ||
+            bot->IsDuringRemoveFromWorld() || bot->IsBeingTeleported() || !sRandomPlayerbotMgr.IsRandomBot(bot))
+            continue;
+
+        if (!bot->IsAlive() || bot->IsInCombat() || bot->InBattleground() || bot->InArena() ||
+            bot->GetMap()->Instanceable())
+            continue;
+
+        ObjectGuid const anchorGuid = ObjectGuid::Create<HighGuid::Player>(anchorLow);
+        uint8 const anchorLevel = sCharacterCache->GetCharacterLevelByGuid(anchorGuid);
+        uint8 const botLevel = bot->GetLevel();
+        if (!anchorLevel || anchorLevel < botLevel + gap)
+            continue;
+
+        if (Player* anchor = ObjectAccessor::FindConnectedPlayer(anchorGuid))
+            if (anchor->IsInWorld() && anchor->HaveAtClient(bot))
+                continue;
+
+        bool groupedWithRealPlayer = false;
+        if (Group* group = bot->GetGroup())
+        {
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            {
+                Player* member = ref->GetSource();
+                if (member && member->IsInWorld() && !GET_PLAYERBOT_AI(member))
+                {
+                    groupedWithRealPlayer = true;
+                    break;
+                }
+            }
+        }
+        if (groupedWithRealPlayer)
+            continue;
+
+        int32 target = std::min<int32>(static_cast<int32>(anchorLevel) - static_cast<int32>(urand(1, 3)),
+            static_cast<int32>(maxLevel));
+        if (target <= static_cast<int32>(botLevel))
+            continue;
+
+        RaiseToAnchor(bot, static_cast<uint8>(target), anchorLevel);
+        ++raised;
+    }
+}
+
+// Raises a level without the factory reroll: the level, then spells, talents and gear on top of what the bot
+// already has, the way a player's maintenance and "autogear" would.
+void RandomBotLevelMgr::RaiseToAnchor(Player* bot, uint8 targetLevel, uint8 anchorLevel)
+{
+    uint8 const oldLevel = bot->GetLevel();
+
+    if (bot->IsMounted())
+        bot->Dismount();
+
+    bot->GiveLevel(targetLevel);
+    bot->SetUInt32Value(PLAYER_XP, 0);
+    bot->InitTalentForLevel();
+    bot->InitStatsForLevel(true);
+
+    PlayerbotFactory factory(bot, targetLevel);
+    factory.InitSkills();
+    factory.InitClassSpells();
+    factory.InitAvailableSpells();
+    factory.InitSpecialSpells();
+    factory.InitTalentsTree(true);
+    factory.InitPet();
+    factory.InitPetTalents();
+    PlayerbotFactory::AutoGear(bot, sPlayerbotAIConfig.autoGearQualityLimit, sPlayerbotAIConfig.autoGearScoreLimit,
+        true);
+    factory.RefreshKeepingInventory();
+
+    bot->SaveToDB(false, false);
+
+    LOG_INFO("playerbots", "[RandomBotLevelMgr] Anchored bot '{}' raised from level {} to {} (anchor level {}).",
+        bot->GetName(), oldLevel, targetLevel, anchorLevel);
 }
 
 // =============================================================================

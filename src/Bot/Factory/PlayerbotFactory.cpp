@@ -1088,6 +1088,47 @@ void PlayerbotFactory::Refresh()
     // bot->SaveToDB(false, false);
 }
 
+// Refresh() for a bot whose progression is kept (AiPlayerbot.PersistentProgression): the same restocks,
+// without the ClearInventory() that opens Refresh(), so what the bot earned stays in its bags. Each step
+// tops up rather than replaces, except InitFood(), which adds two fresh stacks per call; it only runs
+// when the bags hold neither food nor drink, or a bot refreshed every few hours would fill up with it.
+void PlayerbotFactory::RefreshKeepingInventory()
+{
+    InitAttunementQuests();
+    InitAmmo();
+    FindFoodVisitor food(bot, 11);
+    FindFoodVisitor drink(bot, 59);
+    IterateItems(&food);
+    IterateItems(&drink);
+    if (food.GetResult().empty() && drink.GetResult().empty())
+        InitFood();
+    InitReagents();
+    InitConsumables();
+    InitPotions();
+    InitPet();
+    InitPetTalents();
+    InitSkills();
+    InitClassSpells();
+    InitAvailableSpells();
+    InitReputation();
+    InitSpecialSpells();
+    InitMounts();
+    InitKeyring();
+    if (!sPlayerbotAIConfig.equipAndSpecPersistence ||
+        bot->GetLevel() < sPlayerbotAIConfig.equipAndSpecPersistenceLevel)
+    {
+        InitTalentsTree(true);
+    }
+    if (bot->GetLevel() >= sPlayerbotAIConfig.minEnchantingBotLevel)
+        ApplyEnchantAndGemsNew();
+    bot->DurabilityRepairAll(false, 1.0f, false);
+    if (bot->isDead())
+        bot->ResurrectPlayer(1.0f, false);
+    uint32 money = urand(level * 1000, level * 5 * 1000);
+    if (bot->GetMoney() < money)
+        bot->SetMoney(money);
+}
+
 void PlayerbotFactory::InitConsumables()
 {
     uint8 specTab = AiFactory::GetPlayerSpecTab(bot);

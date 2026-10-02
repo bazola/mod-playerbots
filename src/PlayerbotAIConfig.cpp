@@ -832,7 +832,18 @@ bool PlayerbotAIConfig::Initialize()
 // percentages at runtime.
 void PlayerbotAIConfig::LoadRandomBotLevelConfig()
 {
-    persistentProgression = sConfigMgr->GetOption<bool>("AiPlayerbot.PersistentProgression", false);
+    uint32 persistentMode = sConfigMgr->GetOption<uint32>("AiPlayerbot.PersistentProgression", 0);
+    if (persistentMode > static_cast<uint32>(PersistentProgressionMode::ANCHORED))
+    {
+        LOG_ERROR("server.loading", "[RandomBotLevelMgr] Invalid AiPlayerbot.PersistentProgression value: {}. Using 0.",
+            persistentMode);
+        persistentMode = 0;
+    }
+    persistentProgression = static_cast<PersistentProgressionMode>(persistentMode);
+    persistentProgressionFollowGap =
+        sConfigMgr->GetOption<uint32>("AiPlayerbot.PersistentProgression.FollowGap", 0);
+    persistentProgressionAnchorInterval =
+        std::max<uint32>(30, sConfigMgr->GetOption<uint32>("AiPlayerbot.PersistentProgression.AnchorInterval", 300));
 
     // ---- Level brackets ----
     levelBracketsEnabled = sConfigMgr->GetOption<bool>("AiPlayerbot.LevelBrackets.Enabled", false);
@@ -975,8 +986,9 @@ void PlayerbotAIConfig::LoadRandomBotLevelConfig()
     ParseLevelMgrExcludeNames(sConfigMgr->GetOption<std::string>("AiPlayerbot.ResetBotLevel.ExcludeNames", ""),
         resetBotLevelExcludeNames);
 
-    // One switch wins over both automatic level-management sub-features, including reloads.
-    if (persistentProgression)
+    // Keeping every bot wins over both automatic level-management sub-features, including reloads.
+    // Anchored mode leaves them on and exempts the anchored bots one by one instead.
+    if (persistentProgression == PersistentProgressionMode::ALL)
     {
         levelBracketsEnabled = false;
         resetBotLevelEnabled = false;
