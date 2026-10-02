@@ -128,10 +128,21 @@ void RandomBotLevelMgr::LoadConfig()
     if (sPlayerbotAIConfig.persistentProgression == PersistentProgressionMode::ALL)
         _pendingLevelResets.clear();
 
-    if (sPlayerbotAIConfig.persistentProgression == PersistentProgressionMode::ANCHORED)
+    // Load existing anchors before recording encounters, also in ALL mode, so an
+    // earlier/operator-assigned anchor always wins. Flush before a reload can clear the cache.
+    FlushMeetingAnchors();
+    if (sPlayerbotAIConfig.persistentProgression == PersistentProgressionMode::ANCHORED ||
+        sPlayerbotAIConfig.persistentProgressionAnchorOnMeeting)
         LoadAnchors();
     else
+    {
+        std::lock_guard<std::mutex> lock(_anchorMutex);
         _anchors.clear();
+    }
+    {
+        std::lock_guard<std::mutex> lock(_anchorMutex);
+        _meetingTradePartners.clear();
+    }
     _anchorTimer = 0;
 
     _allianceRanges = sPlayerbotAIConfig.levelBracketsAlliance;
@@ -304,6 +315,9 @@ int RandomBotLevelMgr::GetLevelRangeIndex(uint8 level, TeamId team)
 // be resized on a config reload.
 void RandomBotLevelMgr::AdjustBotToRange(Player* bot, int targetRangeIndex, TeamId team)
 {
+    if (IsProgressionKept(bot))
+        return;
+
     if (!bot || !bot->IsInWorld() || !bot->GetSession() || bot->GetSession()->IsLoggingOut() ||
         bot->IsDuringRemoveFromWorld())
         return;
@@ -677,6 +691,8 @@ void RandomBotLevelMgr::RunLevelBracketsDistribution()
             continue;
         if (!sRandomPlayerbotMgr.IsRandomBot(player))
             continue;
+        if (IsProgressionKept(player))
+            continue;
         if (IsNameInExcludeList(player, sPlayerbotAIConfig.levelBracketsExcludeNames))
             continue;
 
@@ -842,6 +858,9 @@ uint8 RandomBotLevelMgr::ComputeResetChance(uint8 level) const
 // whichever is higher) via a full PlayerbotFactory randomize.
 void RandomBotLevelMgr::ResetBot(Player* player, uint8 currentLevel)
 {
+    if (IsProgressionKept(player))
+        return;
+
     uint8 levelToResetTo = sPlayerbotAIConfig.resetBotLevelResetTo;
 
     uint8 dkMinLevel = static_cast<uint8>(sWorld->getIntConfig(CONFIG_START_HEROIC_PLAYER_LEVEL));
@@ -865,6 +884,9 @@ void RandomBotLevelMgr::ResetBot(Player* player, uint8 currentLevel)
 // level, whichever is higher) via a full PlayerbotFactory randomize.
 void RandomBotLevelMgr::SkipBotLevel(Player* player, uint8 currentLevel)
 {
+    if (IsProgressionKept(player))
+        return;
+
     uint8 levelToSkipTo = sPlayerbotAIConfig.resetBotLevelSkipTo;
 
     uint8 dkMinLevel = static_cast<uint8>(sWorld->getIntConfig(CONFIG_START_HEROIC_PLAYER_LEVEL));
@@ -943,6 +965,7 @@ void RandomBotLevelMgr::RunResetPlayedTimeCheck()
 
 void RandomBotLevelMgr::Update(uint32 diff)
 {
+    FlushMeetingAnchors();
     if (sPlayerbotAIConfig.levelBracketsEnabled)
     {
         _bracketsTimer += diff;
@@ -1128,14 +1151,17 @@ bool RandomBotLevelMgr::IsProgressionKept(Player* bot) const
         case PersistentProgressionMode::ALL:
             return true;
         case PersistentProgressionMode::ANCHORED:
+        {
+            std::lock_guard<std::mutex> lock(_anchorMutex);
             return bot && _anchors.count(bot->GetGUID().GetCounter());
+        }
         default:
             return false;
     }
 }
 
-// The module only reads playerbots_bot_anchor. Whatever fills it decides who counts as anchored -- for
-// instance, the bots a real player has come to know -- and can rewrite it at any time.
+// External writers remain supported. Overlay encounters not yet flushed so a concurrent
+// map-thread meeting cannot be lost between the query and the cache replacement.
 void RandomBotLevelMgr::LoadAnchors()
 {
     std::unordered_map<uint32, uint32> anchors;
@@ -1148,6 +1174,9 @@ void RandomBotLevelMgr::LoadAnchors()
         } while (result->NextRow());
     }
 
+    std::lock_guard<std::mutex> lock(_anchorMutex);
+    for (auto const& meeting : _pendingMeetingAnchors)
+        anchors.emplace(meeting);
     if (anchors.size() != _anchors.size())
         LOG_INFO("playerbots", "[RandomBotLevelMgr] {} anchored bots keep their progression.", anchors.size());
     _anchors.swap(anchors);
@@ -1170,7 +1199,12 @@ void RandomBotLevelMgr::RunAnchorFollow()
     uint32 constexpr maxRaisesPerPass = 5;
     uint32 raised = 0;
 
-    for (auto const& [botLow, anchorLow] : _anchors)
+    std::unordered_map<uint32, uint32> anchors;
+    {
+        std::lock_guard<std::mutex> lock(_anchorMutex);
+        anchors = _anchors;
+    }
+    for (auto const& [botLow, anchorLow] : anchors)
     {
         if (raised >= maxRaisesPerPass)
             break;

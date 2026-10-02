@@ -1530,7 +1530,10 @@ bool RandomPlayerbotMgr::ProcessBot(Player* bot)
         // A kept bot is provisioned once and never rerolled after that, but its timer keeps running: a bot
         // that stops being kept (the switch goes off, or it loses its anchor) then waits a normal interval
         // instead of every such bot rerolling on its next update.
-        if (!randomize && RandomBotLevelMgr::instance().IsProgressionKept(bot) && HasFactoryInitialization(bot))
+        bool const preserveMeeting = sPlayerbotAIConfig.persistentProgression == PersistentProgressionMode::ANCHORED &&
+            sPlayerbotAIConfig.persistentProgressionAnchorOnMeeting;
+        if (!randomize && RandomBotLevelMgr::instance().IsProgressionKept(bot) &&
+            (preserveMeeting || HasFactoryInitialization(bot)))
         {
             ScheduleRandomize(botId, urand(sPlayerbotAIConfig.minRandomBotRandomizeTime,
                                            sPlayerbotAIConfig.maxRandomBotRandomizeTime));
@@ -2386,6 +2389,14 @@ bool RandomPlayerbotMgr::HasFactoryInitialization(Player* bot)
         return true;
     }
     return false;
+}
+
+void RandomPlayerbotMgr::PreserveCurrentState(uint32 botId)
+{
+    // Load the event cache before a write, so unrelated events are not hidden by
+    // SetEventValue's create-on-write behavior. This must run on the world thread.
+    if (!GetEventValue(botId, "factory_initialized"))
+        SetEventValue(botId, "factory_initialized", 1, 0);
 }
 
 void RandomPlayerbotMgr::MarkFactoryInitialized(Player* bot)

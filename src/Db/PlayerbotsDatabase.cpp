@@ -129,6 +129,9 @@ void PlayerbotsDatabaseConnection::DoPrepareStatements()
     PrepareStatement(PLAYERBOTS_DEL_RANDOM_BOTS_BY_EVENT, "DELETE FROM playerbots_random_bots WHERE event = ?", CONNECTION_SYNCH);
 
     PrepareStatement(PLAYERBOTS_SEL_TEXT_CHANCE, "SELECT name, probability FROM ai_playerbot_texts_chance", CONNECTION_SYNCH);
+    // Do not replace an anchor assigned by the operator or an earlier meeting.
+    PrepareStatement(PLAYERBOTS_INS_MEETING_ANCHOR,
+        "INSERT IGNORE INTO playerbots_bot_anchor (bot, anchor) VALUES (?, ?)", CONNECTION_SYNCH);
 }
 PlayerbotsDatabaseConnection::PlayerbotsDatabaseConnection(MySQLConnectionInfo& connInfo) : MySQLConnection(connInfo)
 {

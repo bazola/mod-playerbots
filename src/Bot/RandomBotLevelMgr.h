@@ -14,10 +14,12 @@
 #include "ObjectGuid.h"
 #include "PlayerbotAIConfig.h"
 #include "SharedDefines.h"
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 
 class Player;
+class WorldPacket;
 
 // Owns two ported sub-features: periodic redistribution of random bots across per-faction level
 // brackets, and resetting random bots that reach max level. Config lives in PlayerbotAIConfig;
@@ -42,6 +44,9 @@ public:
     // AiPlayerbot.PersistentProgression: true when this random bot's progression is kept -- every random
     // bot in ALL mode, only the bots listed in playerbots_bot_anchor in ANCHORED mode.
     bool IsProgressionKept(Player* bot) const;
+    // Intentional human encounters are cached immediately; database writes run in Update().
+    void RecordMeeting(Player* bot, Player* player);
+    void ObserveMeetingTradePacket(Player* bot, WorldPacket const& packet);
 
 private:
     RandomBotLevelMgr() = default;
@@ -85,6 +90,7 @@ private:
 
     // ---- Persistent progression, anchored mode ----
     void LoadAnchors();
+    void FlushMeetingAnchors();
     void RunAnchorFollow();
     void RaiseToAnchor(Player* bot, uint8 targetLevel, uint8 anchorLevel);
 
@@ -105,6 +111,9 @@ private:
 
     // Anchored bot low guid -> the low guid of the character it is anchored to.
     std::unordered_map<uint32, uint32> _anchors;
+    mutable std::mutex _anchorMutex;
+    std::unordered_map<uint32, uint32> _pendingMeetingAnchors;
+    std::unordered_map<ObjectGuid, ObjectGuid> _meetingTradePartners;
 };
 
 // Registers the random bot level brackets + level reset world/player scripts.
