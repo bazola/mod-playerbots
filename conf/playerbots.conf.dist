@@ -896,9 +896,10 @@ AiPlayerbot.DisableRandomLevels = 0
 # Preserve random bots' progression after their first factory initialization.
 #   0 = off (existing behavior)
 #   1 = every random bot
-#   2 = only the bots listed in the playerbots_bot_anchor table (bot, anchor); whatever fills that
-#       table decides who counts, e.g. the bots a real player has come to know. Read every
-#       AnchorInterval seconds, so it can change while the server runs.
+#   2 = only the bots listed in the playerbots_bot_anchor table (bot, anchor, source); whatever
+#       fills that table decides who counts, e.g. the bots a real player has come to know. Read every
+#       AnchorInterval seconds, so it can change while the server runs. Several writers can share it:
+#       each one tags its rows in `source` and should only ever rewrite or delete its own.
 # A kept bot is never rerolled by scheduled randomization, and its refresh during random-bot
 # recovery/teleportation restocks it without clearing its bags (inventory, quests, reputation and
 # talents survive). Mode 1 overrides LevelBrackets.Enabled and ResetBotLevel.Enabled while on; mode 2
