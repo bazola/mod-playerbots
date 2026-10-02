@@ -894,16 +894,31 @@ AiPlayerbot.BotSendMailEnabled = 1
 AiPlayerbot.DisableRandomLevels = 0
 
 # Preserve random bots' progression after their first factory initialization.
-# Stops scheduled factory randomization and skips the destructive factory refresh during
-# random-bot recovery/teleportation (inventory, quests, reputation and talents).
-# Overrides LevelBrackets.Enabled and ResetBotLevel.Enabled while on, including after
-# ".reload config". Their configured values take effect again when this switch is turned off.
+#   0 = off (existing behavior)
+#   1 = every random bot
+#   2 = only the bots listed in the playerbots_bot_anchor table (bot, anchor); whatever fills that
+#       table decides who counts, e.g. the bots a real player has come to know. Read every
+#       AnchorInterval seconds, so it can change while the server runs.
+# A kept bot is never rerolled by scheduled randomization, and its refresh during random-bot
+# recovery/teleportation restocks it without clearing its bags (inventory, quests, reputation and
+# talents survive). Mode 1 overrides LevelBrackets.Enabled and ResetBotLevel.Enabled while on; mode 2
+# leaves both on and only exempts the anchored bots, so every other bot is handled as before.
 # Initialization is recorded permanently; existing factory-level records are migrated on use.
 # First-time factory initialization and explicit GM init/level/random commands still work.
 # Normal XP, bot learning/gear actions, recovery and population login/logout remain active;
 # this is not a guarantee that a particular bot stays online or never teleports.
-# Reload with ".reload config". Default: 0 (existing behavior).
+# Reload with ".reload config". Default: 0
 AiPlayerbot.PersistentProgression = 0
+
+# Mode 2 only: once an anchored bot is this many levels or more below its anchor, it is raised to
+# 1-3 levels below it, without a factory reroll (level, spells, talents, incremental gear), and
+# never while the anchor can see it or is grouped with it. Raise only: a bot ahead of its anchor
+# stays ahead. 0 = off. Default: 0
+AiPlayerbot.PersistentProgression.FollowGap = 0
+
+# Mode 2 only: seconds between re-reading playerbots_bot_anchor and checking level follow.
+# Minimum 30. Default: 300
+AiPlayerbot.PersistentProgression.AnchorInterval = 300
 
 # Set randombots' starting level here if "AiPlayerbot.DisableRandomLevels" is enabled
 AiPlayerbot.RandombotStartingLevel = 1

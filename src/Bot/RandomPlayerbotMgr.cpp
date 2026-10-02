@@ -34,6 +34,7 @@
 #include "Playerbots.h"
 #include "Position.h"
 #include "RaceMgr.h"
+#include "RandomBotLevelMgr.h"
 #include "Random.h"
 #include "RandomPlayerbotFactory.h"
 #include "ServerFacade.h"
@@ -1526,8 +1527,17 @@ bool RandomPlayerbotMgr::ProcessBot(Player* bot)
     {
         // randomize
         uint32 randomize = GetEventValue(botId, "randomize");
-        // Provision a persistent bot once; timed level events are not durable markers.
-        if (!randomize && (!sPlayerbotAIConfig.persistentProgression || !HasFactoryInitialization(bot)))
+        // A kept bot is provisioned once and never rerolled after that, but its timer keeps running: a bot
+        // that stops being kept (the switch goes off, or it loses its anchor) then waits a normal interval
+        // instead of every such bot rerolling on its next update.
+        if (!randomize && RandomBotLevelMgr::instance().IsProgressionKept(bot) && HasFactoryInitialization(bot))
+        {
+            ScheduleRandomize(botId, urand(sPlayerbotAIConfig.minRandomBotRandomizeTime,
+                                           sPlayerbotAIConfig.maxRandomBotRandomizeTime));
+            randomize = 1;
+        }
+
+        if (!randomize)
         {
             // bool randomiser = true;
             // if (player->GetGuildId())
@@ -2222,12 +2232,12 @@ void RandomPlayerbotMgr::Refresh(Player* bot)
     bot->DurabilityRepairAll(false, 1.0f, false);
     bot->SetFullHealth();
     bot->SetPvP(sWorld->IsPvPRealm());
-    // Keep revival, repair and AI recovery, but do not replace a persistent bot's belongings.
-    if (!sPlayerbotAIConfig.persistentProgression)
-    {
-        PlayerbotFactory factory(bot, bot->GetLevel());
+    // A kept bot is restocked but keeps its belongings.
+    PlayerbotFactory factory(bot, bot->GetLevel());
+    if (RandomBotLevelMgr::instance().IsProgressionKept(bot))
+        factory.RefreshKeepingInventory();
+    else
         factory.Refresh();
-    }
 
     if (bot->GetMaxPower(POWER_MANA) > 0)
         bot->SetPower(POWER_MANA, bot->GetMaxPower(POWER_MANA));
@@ -2380,7 +2390,7 @@ bool RandomPlayerbotMgr::HasFactoryInitialization(Player* bot)
 
 void RandomPlayerbotMgr::MarkFactoryInitialized(Player* bot)
 {
-    if (sPlayerbotAIConfig.persistentProgression)
+    if (sPlayerbotAIConfig.persistentProgression != PersistentProgressionMode::OFF)
         SetEventValue(bot->GetGUID().GetCounter(), "factory_initialized", 1, 0);
 }
 

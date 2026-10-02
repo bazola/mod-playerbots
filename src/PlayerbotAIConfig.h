@@ -47,6 +47,14 @@ enum class ShowHideCosmetic : uint8
     RANDOMIZE = 2
 };
 
+// AiPlayerbot.PersistentProgression: which random bots keep their progression.
+enum class PersistentProgressionMode : uint8
+{
+    OFF = 0,
+    ALL = 1,      // every random bot
+    ANCHORED = 2  // only bots listed in playerbots_bot_anchor
+};
+
 enum class AutoPartyBuffMode : uint8
 {
     DISABLED = 0,
@@ -352,7 +360,9 @@ public:
     ShowHideCosmetic randomBotShowCloak;
     bool randomBotFixedLevel;
     bool disableRandomLevels;
-    bool persistentProgression = false;
+    PersistentProgressionMode persistentProgression = PersistentProgressionMode::OFF;
+    uint32 persistentProgressionFollowGap = 0;
+    uint32 persistentProgressionAnchorInterval = 300;
     float randomBotXPRate;
     uint32 randomBotAllianceRatio;
     uint32 randomBotHordeRatio;
